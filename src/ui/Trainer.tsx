@@ -5,6 +5,8 @@ import {
   Question,
   nextQuestion,
   isCorrect,
+  actionEdges,
+  familyLabel,
 } from "../presets/quiz";
 import { GROUP_LABELS, PresetGroup, presetById } from "../presets";
 import { SUIT_SYMBOLS, SuitIndex } from "../engine/cards";
@@ -108,6 +110,7 @@ export function Trainer() {
     ? question.spot.answers.filter((a) => isCorrect(question, a.key)).map((a) => a.key)
     : [];
   const wasRight = answered !== null && correctKeys.includes(answered);
+  const edges = question ? actionEdges(question.preset, question.hand) : [];
 
   return (
     <div className="mx-auto flex max-w-[760px] flex-col gap-4">
@@ -229,6 +232,24 @@ export function Trainer() {
                     .join(", ")}
                   .
                 </div>
+
+                {/* При ошибке подсказываем, где проходит граница в этом ряду —
+                    так запоминается «докуда» тянется колл и рейз. */}
+                {!wasRight && edges.length > 0 && (
+                  <div className="text-xs text-amber-300/90">
+                    Граница среди {familyLabel(question.hand)}:{" "}
+                    {edges
+                      .map((e) => {
+                        const label =
+                          question.spot.answers.find((a) => a.key === e.kind)?.label ?? e.kind;
+                        return `${label.toLowerCase()} — до ${e.weakest}${
+                          e.partial ? " (частично)" : ""
+                        }`;
+                      })
+                      .join(", ")}
+                    .
+                  </div>
+                )}
                 <button
                   onClick={() => ask()}
                   className="mt-1 self-start rounded-lg bg-emerald-500 px-4 py-1.5 text-sm font-bold text-black transition hover:bg-emerald-400"

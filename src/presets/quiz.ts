@@ -100,6 +100,70 @@ export function interestingHands(p: RangePreset): string[] {
   return out;
 }
 
+/**
+ * «Ряд» руки в матрице: те же старшая карта и тип. Для AJs это все Axs,
+ * для AJo — все Axo, для 77 — все пары. Именно так чарты и запоминают
+ * («Axs открываем до A5s»), поэтому подсказка о границе строится по ряду,
+ * а не по всему диапазону: «самая слабая рука вообще» плохо определена —
+ * непонятно, что слабее, 22 или 76s.
+ *
+ * Порядок — от сильной руки к слабой.
+ */
+export function handFamily(label: string): string[] {
+  const at = CELL_AT.get(label);
+  if (!at) return [];
+  const { row, col, type } = at;
+  const out: string[] = [];
+  if (type === "pair") {
+    for (let i = 0; i < 13; i++) out.push(GRID[i][i].label);
+  } else if (type === "suited") {
+    for (let c = row + 1; c < 13; c++) out.push(GRID[row][c].label);
+  } else {
+    for (let r = col + 1; r < 13; r++) out.push(GRID[r][col].label);
+  }
+  return out;
+}
+
+/** Подпись ряда для текста подсказки: «Axs», «Axo», «пары». */
+export function familyLabel(label: string): string {
+  const at = CELL_AT.get(label);
+  if (!at) return label;
+  if (at.type === "pair") return "пары";
+  const hi = label[0];
+  return `${hi}x${at.type === "suited" ? "s" : "o"}`;
+}
+
+export interface ActionEdge {
+  kind: ActionKind;
+  /** Самая слабая рука ряда, которую ещё играют этим действием. */
+  weakest: string;
+  /** Играется ли она лишь частично (смешанная стратегия). */
+  partial: boolean;
+}
+
+/**
+ * Докуда тянется каждое действие в ряду этой руки — «низ» колла и рейза.
+ * Показывается при ошибке, чтобы было видно, где проходит граница.
+ */
+export function actionEdges(p: RangePreset, hand: string): ActionEdge[] {
+  const family = handFamily(hand);
+  const out: ActionEdge[] = [];
+  for (const kind of ["call", "raise"] as ActionKind[]) {
+    if (!p.actions.some((a) => a.kind === kind)) continue;
+    let weakest: string | null = null;
+    let weight = 0;
+    for (const h of family) {
+      const w = handWeights(p, h)[kind];
+      if (w > 0.01) {
+        weakest = h;
+        weight = w;
+      }
+    }
+    if (weakest) out.push({ kind, weakest, partial: weight < 0.99 });
+  }
+  return out;
+}
+
 export type QuizAnswer = ActionKind | "fold";
 
 export interface QuizSpot {

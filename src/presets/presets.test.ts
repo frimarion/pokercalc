@@ -14,7 +14,21 @@ import {
   presetById,
   presetForPath,
 } from ".";
-import { QUIZ_SPOTS, questionWeights, isCorrect } from "./quiz";
+import {
+  QUIZ_SPOTS,
+  questionWeights,
+  isCorrect,
+  actionEdges,
+  handWeights,
+  handFamily,
+} from "./quiz";
+
+/** Руки того же ряда, что стоят ниже указанной границы. */
+function handsBelow(hand: string, edge: string): string[] {
+  const family = handFamily(hand);
+  const i = family.indexOf(edge);
+  return i < 0 ? [] : family.slice(i + 1);
+}
 import { Range, comboIndicesForLabel } from "../engine/combos";
 
 /** Диапазон пресета: все действия (или только заданное) с их весами. */
@@ -113,6 +127,34 @@ describe("тренажёр", () => {
       expect(s.situation, s.presetId).toMatch(/^Вы /);
       expect(s.situation.endsWith("."), `${s.presetId}: «${s.situation}»`).toBe(true);
     }
+  });
+
+  it("граница действия — действительно самая слабая рука ряда", () => {
+    for (const s of QUIZ_SPOTS) {
+      const p = presetById(s.presetId)!;
+      for (const hand of s.hands) {
+        for (const e of actionEdges(p, hand)) {
+          // сама граница играется
+          expect(
+            handWeights(p, e.weakest)[e.kind],
+            `${p.id}/${hand}: граница ${e.weakest} не играется`,
+          ).toBeGreaterThan(0);
+          // а всё, что ниже неё в том же ряду, — уже нет
+          for (const below of handsBelow(hand, e.weakest)) {
+            expect(
+              handWeights(p, below)[e.kind],
+              `${p.id}/${hand}: ниже границы ${e.weakest} нашлась ${below}`,
+            ).toBe(0);
+          }
+        }
+      }
+    }
+  });
+
+  it("UTG открывает Axo только до ATo — A2o подсказывает эту границу", () => {
+    const p = presetById("rfi-utg")!;
+    const raise = actionEdges(p, "A2o").find((e) => e.kind === "raise");
+    expect(raise?.weakest).toBe("ATo");
   });
 
   it("на смешанной руке верны оба действия, а фолд — нет", () => {
