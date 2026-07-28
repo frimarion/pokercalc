@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# локальные настройки Claude Code (у каждого свои)
+.claude/settings.local.json
+
+# промежуточные файлы оцифровки чартов
+tools/__pycache__/
+page*.json
+*.png
+
+.DS_Store
