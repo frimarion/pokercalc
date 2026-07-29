@@ -52,9 +52,3 @@ tools/           python-скрипты оцифровки PDF-чартов
 
 Подробности архитектуры и гочи — в [CLAUDE.md](CLAUDE.md).
 
-```bash
-export GREENCHARTS_PDF=/path/to/GreenCharts2024_01.pdf
-python tools/extract_charts.py 4
-```
-
-Права на сами чарты принадлежат их автору.
