@@ -52,10 +52,6 @@ tools/           python-скрипты оцифровки PDF-чартов
 
 Подробности архитектуры и гочи — в [CLAUDE.md](CLAUDE.md).
 
-## О префлоп-чартах
-
-Диапазоны в `src/presets/` оцифрованы из PDF **Green Charts 2024** (Greenline Poker) — это сторонний платный продукт, он в репозиторий не входит. Скрипты в `tools/` читают PDF пиксельным сэмплированием; путь к файлу задаётся переменной окружения:
-
 ```bash
 export GREENCHARTS_PDF=/path/to/GreenCharts2024_01.pdf
 python tools/extract_charts.py 4
