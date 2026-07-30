@@ -22,7 +22,7 @@ const BOARD_AT: Record<Street, number> = { preflop: 0, flop: 3, turn: 4, river: 
 const MC_SAMPLES = 60_000;
 
 /** xorshift32 — быстрый детерминированный ГПСЧ, засеянный id раздачи. */
-function seededRng(seed: string): () => number {
+export function seededRng(seed: string): () => number {
   let x = 2166136261;
   for (let i = 0; i < seed.length; i++) {
     x ^= seed.charCodeAt(i);

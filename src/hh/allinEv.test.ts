@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { headsUpEquity, allInKind, allInSpot, analyzeEv } from "./allinEv";
+import { headsUpEquity, allInKind, allInSpot, analyzeEv, seededRng } from "./allinEv";
 import { makeHand, foldsBefore, HandSpec } from "./fixtures";
 import { parseCards, Card } from "../engine/cards";
 import { Position } from "./types";
@@ -11,14 +11,20 @@ const rng = () => 0.5;
 
 describe("headsUpEquity", () => {
   it("сходится с эталонами префлоп-эквити", () => {
-    // Классические ориентиры: они же проверяются в engine/equity.test.ts.
-    // Префлоп считается по Monte Carlo, поэтому допуск — целый процент.
-    expect(headsUpEquity(pair("AhAs"), pair("KhKs"), [], Math.random)).toBeCloseTo(0.826, 2);
-    expect(headsUpEquity(pair("AhKh"), pair("QsQd"), [], Math.random)).toBeCloseTo(0.46, 2);
+    // Префлоп считается по Monte Carlo: при 60k раскладов σ ≈ 0.002, и на
+    // Math.random допуск в полпроцента давал флаки-тест — он один раз уже
+    // уронил CI на AKs vs QQ. Зерно фиксировано, поэтому значения
+    // детерминированы, а допуск 0.01 покрывает и сам разброс метода.
+    const near = (got: number, want: number) => expect(Math.abs(got - want)).toBeLessThan(0.01);
+    const eq = (a: string, b: string) => headsUpEquity(pair(a), pair(b), [], seededRng(a + b));
+
+    // Эталоны из движка проекта (engine/equity.ts, точный перебор).
+    near(eq("AhAs", "KhKs"), 0.8265);
+    near(eq("AhKh", "QsQd"), 0.4626);
     // Масти важны: у QQ против AA в четыре разные масти эквити выше, чем
     // у общеизвестных «18.5%» — те про конфигурацию с двумя общими мастями.
-    expect(headsUpEquity(pair("QcQs"), pair("AdAs"), [], Math.random)).toBeCloseTo(0.185, 2);
-    expect(headsUpEquity(pair("QhQs"), pair("AdAc"), [], Math.random)).toBeCloseTo(0.191, 2);
+    near(eq("QcQs", "AdAs"), 0.1849);
+    near(eq("QhQs", "AdAc"), 0.1910);
   });
 
   it("на полном борде даёт 0, 1 или ничью", () => {
@@ -65,7 +71,8 @@ describe("allInKind", () => {
   it("считает EV префлоп-олл-ина по банку без рейка", () => {
     const s = allInSpot(makeHand(ALLIN_SPEC))!;
     expect(s.street).toBe("preflop");
-    expect(s.equity).toBeCloseTo(0.82, 2);
+    // AA против KK — 82.65% по точному перебору; допуск покрывает Monte Carlo.
+    expect(Math.abs(s.equity - 0.8265)).toBeLessThan(0.01);
     // Банк 40.5bb, герой вложил 20bb: EV ≈ 0.82 × 4050 − 2000.
     expect(s.pot).toBe(4050);
     expect(s.actual).toBe(2050);
