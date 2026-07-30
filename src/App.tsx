@@ -3,9 +3,10 @@ import { BoardBar } from "./ui/BoardBar";
 import { MatrixPanel } from "./ui/MatrixPanel";
 import { SidePanel } from "./ui/SidePanel";
 import { Trainer } from "./ui/Trainer";
+import { Hands } from "./ui/Hands";
 import { useStore } from "./state/store";
 
-type Mode = "ranges" | "trainer";
+type Mode = "ranges" | "trainer" | "hands";
 
 function HeaderTools() {
   const saveScenario = useStore((s) => s.saveScenario);
@@ -58,6 +59,7 @@ export default function App() {
         <div className="ml-3 flex items-center gap-1.5">
           {tab("ranges", "Диапазоны")}
           {tab("trainer", "Тренажёр")}
+          {tab("hands", "История рук")}
         </div>
         {mode === "ranges" && <HeaderTools />}
       </header>
@@ -65,6 +67,8 @@ export default function App() {
       <main className="mx-auto max-w-[1400px] px-6 py-6">
         {mode === "trainer" ? (
           <Trainer />
+        ) : mode === "hands" ? (
+          <Hands />
         ) : (
           <>
             {/* Верхняя панель: hero + борд */}
