@@ -17,7 +17,7 @@ import { presetById } from "../presets/all";
 import { handWeights } from "../presets/quiz";
 import { presetWidthPct } from "../presets/tree";
 import { ActionKind, RangePreset } from "../presets/types";
-import { Hand, HandAction, Position, heroPlayer, streetActions } from "./types";
+import { Hand, HandAction, Position, heroPlayer } from "./types";
 
 export type SpotKind = "rfi" | "sb3bet" | "bbdef" | "3betip" | "def3bet";
 
@@ -69,6 +69,12 @@ export interface Decision {
   /** Пояснение к выбору %-чарта, если он подставлен по ширине соперника. */
   note?: string;
   action: HeroAction;
+  /**
+   * Индекс решающего действия в `hand.actions` — по нему разбор подсвечивает
+   * в логе раздачи именно тот ход, к которому относится вердикт. Без него
+   * в раздаче с двумя решениями героя непонятно, о каком речь.
+   */
+  actionIndex: number;
   /** Вес выбранного действия по чарту, 0..1. */
   weight: number;
   verdict: Verdict;
@@ -207,7 +213,15 @@ function defenseSpot(pos: Position, raiser: Position): Spot | null {
   };
 }
 
-function build(h: Hand, label: string, pos: Position, spot: Spot, action: HeroAction, net: number): Decision | null {
+function build(
+  h: Hand,
+  label: string,
+  pos: Position,
+  spot: Spot,
+  action: HeroAction,
+  actionIndex: number,
+  net: number,
+): Decision | null {
   const preset = presetById(spot.presetId);
   if (!preset) return null;
   const { weight, verdict } = judge(preset, label, action);
@@ -221,6 +235,7 @@ function build(h: Hand, label: string, pos: Position, spot: Spot, action: HeroAc
     spot: spot.spot,
     note: spot.note,
     action,
+    actionIndex,
     weight,
     verdict,
     fullRing: h.players.length === 6,
@@ -238,30 +253,35 @@ export function decisionsOf(h: Hand): Decision[] {
   const label = handLabel(hero.cards[0], hero.cards[1]);
   const pos = hero.position;
   const net = hero.collected - hero.contributed;
-  const pre = streetActions(h, "preflop");
-  const firstIdx = pre.findIndex((a) => a.player === hero.name);
+
+  // Индексы в hand.actions тащатся рядом с действиями: по ним разбор потом
+  // подсвечивает нужный ход в логе раздачи.
+  const pre = h.actions
+    .map((a, i) => ({ a, i }))
+    .filter(({ a }) => a.street === "preflop" && a.type !== "post");
+  const firstIdx = pre.findIndex(({ a }) => a.player === hero.name);
   if (firstIdx < 0) return [];
 
   const out: Decision[] = [];
-  const firstAction = actionOf(pre[firstIdx]);
-  const opening = openingSpot(h, pos, pre.slice(0, firstIdx));
+  const firstAction = actionOf(pre[firstIdx].a);
+  const opening = openingSpot(h, pos, pre.slice(0, firstIdx).map(({ a }) => a));
   if (opening && firstAction) {
-    const d = build(h, label, pos, opening, firstAction, net);
+    const d = build(h, label, pos, opening, firstAction, pre[firstIdx].i, net);
     if (d) out.push(d);
   }
 
   // Ответ на 3бет: герой открыл первым, кто-то переставил, ход снова к нему.
-  if (opening?.kind === "rfi" && pre[firstIdx].type === "raise") {
-    const tbIdx = pre.findIndex((a, i) => i > firstIdx && a.type === "raise");
+  if (opening?.kind === "rfi" && pre[firstIdx].a.type === "raise") {
+    const tbIdx = pre.findIndex(({ a }, i) => i > firstIdx && a.type === "raise");
     if (tbIdx >= 0) {
-      const answerIdx = pre.findIndex((a, i) => i > tbIdx && a.player === hero.name);
+      const answerIdx = pre.findIndex(({ a }, i) => i > tbIdx && a.player === hero.name);
       // Только первый 3бет: после 4бета и сквизов чарт уже не тот.
-      const extraRaise = pre.some((a, i) => i > tbIdx && i < answerIdx && a.type === "raise");
-      const answer = answerIdx >= 0 ? actionOf(pre[answerIdx]) : null;
-      const raiser = h.players.find((p) => p.name === pre[tbIdx].player);
+      const extraRaise = pre.some(({ a }, i) => i > tbIdx && i < answerIdx && a.type === "raise");
+      const answer = answerIdx >= 0 ? actionOf(pre[answerIdx].a) : null;
+      const raiser = h.players.find((p) => p.name === pre[tbIdx].a.player);
       if (answer && raiser && !extraRaise) {
         const spot = defenseSpot(pos, raiser.position);
-        const d = spot && build(h, label, pos, spot, answer, net);
+        const d = spot && build(h, label, pos, spot, answer, pre[answerIdx].i, net);
         if (d) out.push(d);
       }
     }

@@ -11,6 +11,7 @@ import {
 } from "../hh/deviations";
 import { gridCells } from "../engine/combos";
 import { useStore } from "../state/store";
+import { HandLogView } from "./HandLogView";
 
 const GRID = gridCells();
 
@@ -62,13 +63,19 @@ function Bar({ counts, total }: { counts: Record<Verdict, number>; total: number
   );
 }
 
-/** Сверка префлопа с Green Charts: по спотам, по рукам и списком ошибок. */
+/** Сверка префлопа с Green Charts: по спотам, по рукам и разбор раздач. */
 export function HandsDeviations({ hands }: { hands: Hand[] }) {
   const [fullRingOnly, setFullRingOnly] = useState(false);
   const [kind, setKind] = useState<SpotKind | "all">("all");
+  /** Фильтр по конкретной руке — ставится кликом по ячейке матрицы. */
+  const [handLabel, setHandLabel] = useState<string | null>(null);
+  const [onlyDeviations, setOnlyDeviations] = useState(true);
+  /** Выбранное решение: handId + индекс действия однозначно его задают. */
+  const [selected, setSelected] = useState<{ handId: string; actionIndex: number } | null>(null);
   const applyPreset = useStore((s) => s.applyPreset);
 
   const report = useMemo(() => analyzeDeviations(hands), [hands]);
+  const byId = useMemo(() => new Map(hands.map((h) => [h.id, h])), [hands]);
 
   const decisions = useMemo(
     () =>
@@ -79,13 +86,25 @@ export function HandsDeviations({ hands }: { hands: Hand[] }) {
   );
 
   const view = useMemo(() => summarizeDecisions(decisions), [decisions]);
-  const mistakes = useMemo(
+
+  // Список для разбора: сначала самые дорогие. Отклонения по умолчанию, но
+  // можно посмотреть и решения по чарту — иногда важно убедиться, что
+  // «правильное» решение и правда было тем, за которое его принял разбор.
+  const listed = useMemo(
     () =>
       decisions
-        .filter((d) => DEVIATIONS.includes(d.verdict))
-        .sort((a, b) => a.net - b.net)
-        .slice(0, 40),
-    [decisions],
+        .filter((d) => !onlyDeviations || DEVIATIONS.includes(d.verdict))
+        .filter((d) => handLabel === null || d.label === handLabel)
+        .sort((a, b) => a.net - b.net),
+    [decisions, onlyDeviations, handLabel],
+  );
+
+  const current = useMemo(
+    () =>
+      selected
+        ? listed.find((d) => d.handId === selected.handId && d.actionIndex === selected.actionIndex)
+        : undefined,
+    [listed, selected],
   );
 
   if (report.decisions.length === 0) {
@@ -204,15 +223,23 @@ export function HandsDeviations({ hands }: { hands: Hand[] }) {
               const c = view.byHand.get(cell.label);
               const total = c?.total ?? 0;
               const dev = c?.deviations ?? 0;
+              const active = handLabel === cell.label;
               return (
-                <div
+                <button
                   key={cell.label}
+                  disabled={total === 0}
+                  onClick={() => {
+                    setHandLabel(active ? null : cell.label);
+                    setSelected(null);
+                  }}
                   title={
                     total === 0
                       ? `${cell.label}: не встречалась`
-                      : `${cell.label}: ${dev} из ${total} вне чарта`
+                      : `${cell.label}: ${dev} из ${total} вне чарта — нажмите, чтобы отобрать раздачи`
                   }
-                  className="flex aspect-square flex-col items-center justify-center rounded-[3px] text-[10px] font-semibold leading-none"
+                  className={`flex aspect-square flex-col items-center justify-center rounded-[3px] text-[10px] font-semibold leading-none transition ${
+                    active ? "ring-2 ring-inset ring-emerald-400" : ""
+                  } ${total > 0 ? "cursor-pointer hover:brightness-125" : "cursor-default"}`}
                   style={{
                     background: cellColor(dev, total),
                     color: total === 0 ? "#4b5551" : "#e7ece9",
@@ -220,49 +247,103 @@ export function HandsDeviations({ hands }: { hands: Hand[] }) {
                 >
                   <span className="text-[10px]">{cell.label}</span>
                   {dev > 0 && <span className="mt-[1px] text-[8px] opacity-80">{dev}</span>}
-                </div>
+                </button>
               );
             })}
           </div>
           <p className="mt-2 text-[11px] text-neutral-600">
             Чем краснее рука, тем чаще вы играли её не так, как чарт. Насыщенность гасится на малой
-            выборке: одна ошибка на одной раздаче — ещё не тенденция.
+            выборке: одна ошибка на одной раздаче — ещё не тенденция. Нажмите на руку, чтобы
+            отобрать её раздачи.
           </p>
         </div>
 
         <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">
-            Самые дорогие отклонения
-          </h3>
-          {mistakes.length === 0 ? (
-            <div className="text-sm text-neutral-500">Отклонений нет — все решения по чарту.</div>
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+              {onlyDeviations ? "Отклонения" : "Решения"} ({listed.length})
+            </h3>
+            {handLabel && (
+              <button
+                onClick={() => {
+                  setHandLabel(null);
+                  setSelected(null);
+                }}
+                className="rounded border border-emerald-400/40 bg-emerald-400/10 px-1.5 py-0.5 font-mono text-[11px] text-emerald-300"
+              >
+                {handLabel} ✕
+              </button>
+            )}
+            <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-[11px] text-neutral-400">
+              <input
+                type="checkbox"
+                checked={onlyDeviations}
+                onChange={(e) => {
+                  setOnlyDeviations(e.target.checked);
+                  setSelected(null);
+                }}
+                className="accent-emerald-500"
+              />
+              только отклонения
+            </label>
+          </div>
+          {listed.length === 0 ? (
+            <div className="text-sm text-neutral-500">
+              {onlyDeviations ? "Отклонений нет — все решения по чарту." : "Решений нет."}
+            </div>
           ) : (
             <div className="max-h-[420px] overflow-y-auto rounded-xl border border-white/10">
               <table className="w-full text-sm">
                 <tbody>
-                  {mistakes.map((d, i) => (
-                    <tr key={`${d.handId}-${i}`} className="border-b border-white/5 last:border-0">
-                      <td className="px-3 py-2 font-mono font-bold">{d.label}</td>
-                      <td className="px-3 py-2 text-xs text-neutral-400">
-                        {d.spot}
-                        {d.note && <div className="text-[10px] text-neutral-600">{d.note}</div>}
-                      </td>
-                      <td className={`px-3 py-2 text-xs font-semibold ${VERDICT_COLOR[d.verdict]}`}>
-                        {VERDICT_LABELS[d.verdict]}
-                      </td>
-                      <td
-                        className={`px-3 py-2 text-right tabular-nums ${d.net >= 0 ? "text-emerald-400" : "text-rose-400"}`}
+                  {listed.map((d) => {
+                    const active =
+                      selected?.handId === d.handId && selected?.actionIndex === d.actionIndex;
+                    return (
+                      <tr
+                        key={`${d.handId}-${d.actionIndex}`}
+                        onClick={() =>
+                          setSelected(
+                            active ? null : { handId: d.handId, actionIndex: d.actionIndex },
+                          )
+                        }
+                        title="Показать лог раздачи"
+                        className={`cursor-pointer border-b border-white/5 last:border-0 ${
+                          active ? "bg-emerald-400/10" : "hover:bg-white/[0.04]"
+                        }`}
                       >
-                        {money(d.net)}
-                      </td>
-                    </tr>
-                  ))}
+                        <td className="px-3 py-2 font-mono font-bold">{d.label}</td>
+                        <td className="px-3 py-2 text-xs text-neutral-400">
+                          {d.spot}
+                          {d.note && <div className="text-[10px] text-neutral-600">{d.note}</div>}
+                        </td>
+                        <td className={`px-3 py-2 text-xs font-semibold ${VERDICT_COLOR[d.verdict]}`}>
+                          {VERDICT_LABELS[d.verdict]}
+                        </td>
+                        <td
+                          className={`px-3 py-2 text-right tabular-nums ${d.net >= 0 ? "text-emerald-400" : "text-rose-400"}`}
+                        >
+                          {money(d.net)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
+          <p className="mt-2 text-[11px] text-neutral-600">
+            Нажмите на строку — откроется лог раздачи с подсветкой того самого решения.
+          </p>
         </div>
       </section>
+
+      {current && byId.has(current.handId) && (
+        <HandLogView
+          hand={byId.get(current.handId)!}
+          decision={current}
+          onClose={() => setSelected(null)}
+        />
+      )}
 
       <p className="text-[11px] text-neutral-600">
         Не сверено {report.unmatched} раздач: лимпед-поты, сквизы и 4бет+ — для них чарты Green
