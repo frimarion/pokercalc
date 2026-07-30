@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { decisionsOf, analyzeDeviations, Decision, DEVIATIONS } from "./deviations";
-import { makeHand, foldsBefore, HandSpec } from "./fixtures";
+import { makeHand, foldsBefore, HandSpec, ActSpec } from "./fixtures";
 import { presetById } from "../presets/all";
 import { handWeights } from "../presets/quiz";
 import { Position } from "./types";
@@ -83,6 +83,63 @@ describe("выбор чарта по споту", () => {
     expect(vsCo.presetId).toBe("3betip-26");
   });
 
+  it("лимп до нас — чарт изолэйта по месту героя", () => {
+    const iso = (hero: Position, act: ActSpec): Decision =>
+      only({
+        hero,
+        cards: "AhKh",
+        preflop: [
+          { who: "UTG", type: "call", bb: 1 },
+          ...(hero === "MP" ? [] : [{ who: "MP" as Position, type: "fold" as const }]),
+          ...(hero === "MP" || hero === "CO" ? [] : [{ who: "CO" as Position, type: "fold" as const }]),
+          act,
+        ],
+      });
+
+    expect(iso("CO", { who: "CO", type: "raise", to: 5 })).toMatchObject({
+      kind: "iso", presetId: "iso-co", spot: "Изолэйт с CO", action: "raise",
+    });
+    expect(iso("MP", { who: "MP", type: "raise", to: 6 }).presetId).toBe("iso-mp");
+    // Число лимперов попадает в пояснение — от него зависит сайзинг.
+    expect(iso("CO", { who: "CO", type: "raise", to: 5 }).note).toBe("лимперов: 1");
+  });
+
+  it("на BB отказ от изолэйта — это чек, а не фолд", () => {
+    const d = only({
+      hero: "BB",
+      cards: "7h2d",
+      preflop: [
+        { who: "UTG", type: "call", bb: 1 }, { who: "MP", type: "fold" },
+        { who: "CO", type: "fold" }, { who: "BU", type: "fold" },
+        { who: "SB", type: "fold" },
+        { who: "BB", type: "check" },
+      ],
+    });
+    // Чек засчитан как отказ сыграть руку — и по чарту это верно.
+    expect(d).toMatchObject({ kind: "iso", presetId: "iso-bb", action: "fold", verdict: "ok" });
+  });
+
+  it("на SB доставка блайнда — отдельное действие чарта", () => {
+    const preset = presetById("iso-sb")!;
+    expect(preset.actions.map((a) => a.kind)).toEqual(["raise", "call"]);
+    // Рука, которую чарт только доставляет: колл по чарту, изолэйт — нет.
+    const completeOnly = ["76s", "65s", "54s", "44", "33", "22"].find((h) => {
+      const w = handWeights(preset, h);
+      return w.call > 0.99 && w.raise < 0.01;
+    });
+    expect(completeOnly, "в iso-sb должна быть рука только на доставку").toBeDefined();
+    const d = only({
+      hero: "SB",
+      cards: `${completeOnly![0]}h${completeOnly![1]}h`,
+      preflop: [
+        { who: "UTG", type: "call", bb: 1 }, { who: "MP", type: "fold" },
+        { who: "CO", type: "fold" }, { who: "BU", type: "fold" },
+        { who: "SB", type: "call", bb: 0.5 },
+      ],
+    });
+    expect(d).toMatchObject({ kind: "iso", presetId: "iso-sb", action: "call", verdict: "ok" });
+  });
+
   it("ответ на 3бет — второе решение той же раздачи", () => {
     const ds = decisionsOf(makeHand({
       hero: "CO",
@@ -121,12 +178,12 @@ describe("выбор чарта по споту", () => {
 describe("что чартом не покрыто", () => {
   const nothing = (spec: HandSpec) => expect(decisionsOf(makeHand(spec))).toEqual([]);
 
-  it("лимпед-поты — чарт Isolate не оцифрован", () => {
+  it("лимп, а потом рейз до нас — это уже не изолэйт", () => {
     nothing({
       hero: "BU",
       preflop: [
-        { who: "UTG", type: "fold" }, { who: "MP", type: "call", bb: 1 },
-        { who: "CO", type: "fold" }, { who: "BU", type: "raise", to: 4 },
+        { who: "UTG", type: "call", bb: 1 }, { who: "MP", type: "raise", to: 4 },
+        { who: "CO", type: "fold" }, { who: "BU", type: "fold" },
       ],
     });
   });

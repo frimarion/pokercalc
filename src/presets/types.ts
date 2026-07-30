@@ -1,6 +1,15 @@
-// Общие типы префлоп-пресетов (Green Charts 2024, Greenline Poker).
+// Общие типы префлоп-пресетов: кэш (Green Charts 2024, Greenline Poker)
+// и MTT (солверные чарты, 100bb ChipEV, 8-max).
 
-export type PresetGroup = "RFI" | "SB3BET" | "BBDEF" | "3BETIP" | "DEF3BETIP" | "DEF3BETOOP";
+export type PresetGroup =
+  | "RFI"
+  | "ISO"
+  | "SB3BET"
+  | "BBDEF"
+  | "3BETIP"
+  | "DEF3BETIP"
+  | "DEF3BETOOP"
+  | "MTTRFI";
 
 /** Действие, которым разыгрывается часть диапазона. */
 export type ActionKind = "raise" | "call";
@@ -23,6 +32,13 @@ export interface PresetAction {
    */
   threeQuarter?: string[];
   quarter?: string[];
+  /**
+   * Произвольные частоты «рука → вес 0..1». Кэш-чарты Green Charts рисуются
+   * дискретными долями (1 / 0.75 / 0.5 / 0.25), а солверные MTT-чарты играют
+   * руку любой частотой (0.03, 0.41, …), и округление до четвертей исказило бы
+   * ширину диапазона. Такие чарты кладут сюда всё, что не 1.0.
+   */
+  mixed?: Record<string, number>;
   /**
    * Цвет действия для раскраски матрицы под легенду чарта (режим «цвета
    * пресета»). Если не задан, берётся дефолт по kind (raise→red, call→green).
@@ -61,19 +77,29 @@ export const SITUATIONAL_WEIGHT = 0.5;
 
 export const GROUP_LABELS: Record<PresetGroup, string> = {
   RFI: "RFI — открытие",
+  ISO: "ISO — изолэйт после лимпа",
   SB3BET: "SB — 3бет защита",
   BBDEF: "BB — защита",
   "3BETIP": "3бет IP — против опена",
   DEF3BETIP: "Защита на 3бет — в позиции",
   DEF3BETOOP: "Защита на 3бет — без позиции",
+  MTTRFI: "MTT · RFI — открытие",
 };
+
+/** Руки действия, играемые частично, вместе с весами. */
+export function partialWeights(action: PresetAction): [string, number][] {
+  return [
+    ...(action.threeQuarter ?? []).map((h) => [h, 0.75] as [string, number]),
+    ...action.situational.map((h) => [h, SITUATIONAL_WEIGHT] as [string, number]),
+    ...(action.quarter ?? []).map((h) => [h, 0.25] as [string, number]),
+    ...Object.entries(action.mixed ?? {}),
+  ];
+}
 
 /** Собрать один действие-набор в плоский список [рука, вес]. */
 export function actionWeights(action: PresetAction): [string, number][] {
   return [
     ...action.always.map((h) => [h, 1] as [string, number]),
-    ...(action.threeQuarter ?? []).map((h) => [h, 0.75] as [string, number]),
-    ...action.situational.map((h) => [h, SITUATIONAL_WEIGHT] as [string, number]),
-    ...(action.quarter ?? []).map((h) => [h, 0.25] as [string, number]),
+    ...partialWeights(action),
   ];
 }

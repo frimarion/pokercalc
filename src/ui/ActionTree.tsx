@@ -1,24 +1,36 @@
 import { useState } from "react";
-import { resolvePath, presetForPath, presetById, presetWidthPct } from "../presets";
+import {
+  resolvePath,
+  presetForPath,
+  presetById,
+  presetWidthPct,
+  FORMATS,
+  FormatKey,
+} from "../presets";
 import { useStore } from "../state/store";
 
 /**
  * Ветка событий префлопа — спот собирается по шагам, как action tree
  * в GTO Wizard: кто открыл → кто и как ответил → как опенер ответил
- * на 3бет. Каждый шаг применяет свой чарт Green Charts.
+ * на 3бет. Каждый шаг применяет свой чарт.
+ *
+ * У кэша (6-max, Green Charts) и MTT (8-max, солвер) свои деревья —
+ * переключатель формата выбирает корень.
  */
 export function ActionTree() {
   const applyPreset = useStore((s) => s.applyPreset);
   const activeSide = useStore((s) => s.activeSide);
+  const [format, setFormat] = useState<FormatKey>("cash");
   const [path, setPath] = useState<string[]>([]);
   const [withSituational, setWithSituational] = useState(true);
 
-  const chain = resolvePath(path);
-  const { presetId, actionKind } = presetForPath(path);
+  const root = FORMATS.find((f) => f.key === format)!.tree;
+  const chain = resolvePath(path, root);
+  const { presetId, actionKind } = presetForPath(path, root);
   const preset = presetId ? presetById(presetId) : undefined;
 
   const apply = (nextPath: string[], situational: boolean) => {
-    const target = presetForPath(nextPath);
+    const target = presetForPath(nextPath, root);
     if (target.presetId) applyPreset(target.presetId, situational, target.actionKind);
   };
 
@@ -35,6 +47,25 @@ export function ActionTree() {
         <span className="text-[11px] uppercase tracking-wider text-neutral-500">
           Ветка событий
         </span>
+        <div className="flex rounded-md border border-white/10 p-0.5">
+          {FORMATS.map((f) => (
+            <button
+              key={f.key}
+              title={f.note}
+              onClick={() => {
+                setFormat(f.key);
+                setPath([]); // деревья разные — путь кэша в MTT не имеет смысла
+              }}
+              className={`rounded px-2 py-0.5 text-[10px] font-semibold transition ${
+                format === f.key
+                  ? "bg-emerald-500 text-black"
+                  : "text-neutral-400 hover:bg-white/5"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
         {path.length > 0 && (
           <button
             onClick={() => setPath([])}

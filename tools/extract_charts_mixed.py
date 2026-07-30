@@ -7,7 +7,7 @@
 import sys
 import json
 import numpy as np
-from extract import render, find_grids, RANKS
+from extract_charts import render, find_grids, RANKS
 
 
 def classify_pixels(px):

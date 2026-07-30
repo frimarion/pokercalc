@@ -19,17 +19,20 @@ import { presetWidthPct } from "../presets/tree";
 import { ActionKind, RangePreset } from "../presets/types";
 import { Hand, HandAction, Position, heroPlayer } from "./types";
 
-export type SpotKind = "rfi" | "sb3bet" | "bbdef" | "3betip" | "def3bet";
+export type SpotKind = "rfi" | "iso" | "sb3bet" | "bbdef" | "3betip" | "def3bet";
 
 export const SPOT_LABELS: Record<SpotKind, string> = {
   rfi: "Опен (RFI)",
+  iso: "Изолэйт после лимпа",
   sb3bet: "SB — защита 3бетом",
   bbdef: "BB — защита",
   "3betip": "3бет в позиции",
   def3bet: "Ответ на 3бет",
 };
 
-export const SPOT_ORDER: SpotKind[] = ["rfi", "3betip", "sb3bet", "bbdef", "def3bet"];
+export const SPOT_ORDER: SpotKind[] = [
+  "rfi", "iso", "3betip", "sb3bet", "bbdef", "def3bet",
+];
 
 export type HeroAction = ActionKind | "fold";
 
@@ -109,11 +112,18 @@ const DEF_IP_PCTS = [6, 8, 10, 12, 14];
 const DEF_OOP_PCTS = [8, 10, 12, 18];
 const IP3BET_PCTS = [15, 18, 26];
 
-function actionOf(a: HandAction): HeroAction | null {
+/**
+ * `checkDeclines` — считать ли чек отказом сыграть руку. В лимпед-поте у BB
+ * фолда нет: не изолировать можно только чеком, и по чарту это ровно то же
+ * самое. Без этого из выборки выпали бы все случаи, когда изолэйт пропущен,
+ * и «уже чарта» на BB не нашлось бы никогда.
+ */
+function actionOf(a: HandAction, checkDeclines = false): HeroAction | null {
   if (a.type === "fold") return "fold";
   if (a.type === "call") return "call";
   if (a.type === "raise") return "raise";
-  return null; // чек на бб — это не решение, чарта для него нет
+  if (a.type === "check" && checkDeclines) return "fold";
+  return null;
 }
 
 /** Как чарт относится к сыгранному действию. */
@@ -139,8 +149,19 @@ interface Spot {
 function openingSpot(h: Hand, pos: Position, before: HandAction[]): Spot | null {
   const raises = before.filter((a) => a.type === "raise");
   const limps = before.filter((a) => a.type === "call");
-  if (limps.length > 0) return null; // лимпед-поты: чарт Isolate не оцифрован
   if (raises.length > 1) return null; // сквиз-споты чартами не покрыты
+
+  if (limps.length > 0) {
+    // До нас долимпили и не подняли — это чарт Isolate. С UTG такого спота
+    // не бывает: до него лимпить некому, и чарта для UTG в оригинале нет.
+    if (raises.length > 0 || pos === "UTG") return null;
+    return {
+      kind: "iso",
+      presetId: `iso-${pos.toLowerCase()}`,
+      spot: `Изолэйт с ${pos}`,
+      note: `лимперов: ${limps.length}`,
+    };
+  }
 
   if (raises.length === 0) {
     // Все сфолдили. У BB здесь либо ход бесплатный, либо опции нет.
@@ -263,8 +284,9 @@ export function decisionsOf(h: Hand): Decision[] {
   if (firstIdx < 0) return [];
 
   const out: Decision[] = [];
-  const firstAction = actionOf(pre[firstIdx].a);
   const opening = openingSpot(h, pos, pre.slice(0, firstIdx).map(({ a }) => a));
+  // В лимпед-поте отказ от изолэйта у BB выглядит как чек, а не фолд.
+  const firstAction = actionOf(pre[firstIdx].a, opening?.kind === "iso");
   if (opening && firstAction) {
     const d = build(h, label, pos, opening, firstAction, pre[firstIdx].i, net);
     if (d) out.push(d);

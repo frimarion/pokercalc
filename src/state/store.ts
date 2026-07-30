@@ -4,7 +4,7 @@ import { Range, comboIndicesForLabel } from "../engine/combos";
 import { filterRange, MadeCategory, DrawType } from "../engine/categorize";
 import {
   ALL_PRESETS,
-  SITUATIONAL_WEIGHT,
+  partialWeights,
   ActionKind,
   ActionColor,
   ColorSegment,
@@ -178,11 +178,7 @@ export const useStore = create<AppState>((set, get) => ({
       }
       if (action.always.length > 0) addLegend(color, action.label);
       if (!includeSituational) continue;
-      const partial: [string, number][] = [
-        ...(action.threeQuarter ?? []).map((h) => [h, 0.75] as [string, number]),
-        ...action.situational.map((h) => [h, SITUATIONAL_WEIGHT] as [string, number]),
-        ...(action.quarter ?? []).map((h) => [h, 0.25] as [string, number]),
-      ];
+      const partial = partialWeights(action);
       if (partial.length > 0) {
         addLegend(partialColor, yellowPartial ? `${action.label} ситуативно` : action.label);
       }

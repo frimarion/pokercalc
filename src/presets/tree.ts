@@ -10,11 +10,22 @@
 // НЕ используется для автоподстановки чарта — %-чарты выбираются явно, а
 // фактическая ширина показывается подсказкой, чтобы выбрать ближайший.
 
-import { ActionKind, RangePreset } from "./types";
+import { ActionKind, RangePreset, partialWeights } from "./types";
 import { presetById } from "./all";
 import { Range } from "../engine/combos";
 
-export type Seat = "UTG" | "MP" | "CO" | "BU" | "SB" | "BB";
+/** Места за столом: 6-max кэша (UTG/MP/CO/BU) и 8-max MTT (UTG1/LJ/HJ/BTN). */
+export type Seat =
+  | "UTG"
+  | "UTG1"
+  | "MP"
+  | "LJ"
+  | "HJ"
+  | "CO"
+  | "BU"
+  | "BTN"
+  | "SB"
+  | "BB";
 
 export interface TreeOption {
   key: string;
@@ -43,13 +54,8 @@ export function presetWidthPct(p: RangePreset, kind?: ActionKind): number {
   for (const a of p.actions) {
     if (kind && a.kind !== kind) continue;
     for (const h of a.always) r.setHand(h, 1);
-    const partial: [string[], number][] = [
-      [a.threeQuarter ?? [], 0.75],
-      [a.situational, 0.5],
-      [a.quarter ?? [], 0.25],
-    ];
-    for (const [hands, w] of partial) {
-      for (const h of hands) r.setHand(h, Math.min(1, r.handWeight(h) + w));
+    for (const [h, w] of partialWeights(a)) {
+      r.setHand(h, Math.min(1, r.handWeight(h) + w));
     }
   }
   return (r.totalCombos() / 1326) * 100;
@@ -207,24 +213,74 @@ function respondersNode(op: Opener): TreeNode {
   };
 }
 
-export const ACTION_TREE: TreeNode = {
-  title: "Опен",
-  note: "все до этого сфолдили",
+/**
+ * Места, с которых бывает изолэйт. UTG в чарте нет: до него лимпить некому.
+ * Сайзинг из легенды стр. 5 — в позиции 4bb, без позиции 5bb, плюс 1bb за
+ * каждого лимпера.
+ */
+const ISO_SEATS: { key: string; seat: Seat; size: string }[] = [
+  { key: "mp", seat: "MP", size: "5bb + 1bb за лимпера" },
+  { key: "co", seat: "CO", size: "4bb + 1bb за лимпера" },
+  { key: "bu", seat: "BU", size: "4bb + 1bb за лимпера" },
+  { key: "sb", seat: "SB", size: "5bb + 1bb за лимпера" },
+  { key: "bb", seat: "BB", size: "5bb + 1bb за лимпера" },
+];
+
+/** Шаг «до нас лимп»: с какого места изолируем. */
+const isoNode: TreeNode = {
+  title: "Изолэйт после лимпа",
+  note: "кто-то долимпил, рейза не было",
   showFold: true,
-  options: OPENERS.map((op) => ({
-    key: op.key,
-    label: op.seat,
-    note: op.note ? `рейз ${op.size} · ${op.note}` : `рейз ${op.size}`,
-    presetId: op.rfi,
-    actionKind: "raise",
-    next: respondersNode(op),
+  options: ISO_SEATS.map(({ key, seat, size }) => ({
+    key,
+    label: seat,
+    note: size,
+    presetId: `iso-${key}`,
+    // Только на SB у чарта есть второе действие — доставить блайнд до целого.
+    next:
+      seat === "SB"
+        ? {
+            title: "Действие",
+            note: "на SB блайнд уже наполовину поставлен",
+            options: [
+              { key: "all", label: "Весь диапазон", presetId: "iso-sb" },
+              { key: "raise", label: "Изолэйт", presetId: "iso-sb", actionKind: "raise" },
+              {
+                key: "call",
+                label: "Доставить 0.5bb",
+                presetId: "iso-sb",
+                actionKind: "call",
+              },
+            ],
+          }
+        : undefined,
   })),
 };
 
+export const ACTION_TREE: TreeNode = {
+  title: "Первое действие",
+  note: "открываем сами или отвечаем на лимп",
+  showFold: true,
+  options: [
+    ...OPENERS.map((op) => ({
+      key: op.key,
+      label: op.seat,
+      note: op.note ? `рейз ${op.size} · ${op.note}` : `рейз ${op.size}`,
+      presetId: op.rfi,
+      actionKind: "raise" as ActionKind,
+      next: respondersNode(op),
+    })),
+    { key: "iso", label: "Изолэйт", note: "до нас лимп", next: isoNode },
+  ],
+};
+
 /** Цепочка карточек и выбранных опций для текущего пути. */
-export function resolvePath(path: string[]): { node: TreeNode; chosen?: TreeOption }[] {
+export function resolvePath(
+  path: string[],
+  root: TreeNode = ACTION_TREE,
+): { node: TreeNode; chosen?: TreeOption }[] {
   const chain: { node: TreeNode; chosen?: TreeOption }[] = [];
-  let node: TreeNode | undefined = ACTION_TREE;
+  let node: TreeNode | undefined = root;
   for (let i = 0; node; i++) {
     const chosen: TreeOption | undefined = node.options.find((o) => o.key === path[i]);
     chain.push({ node, chosen });
@@ -234,10 +290,13 @@ export function resolvePath(path: string[]): { node: TreeNode; chosen?: TreeOpti
 }
 
 /** Чарт и фильтр действия, соответствующие пути. */
-export function presetForPath(path: string[]): { presetId?: string; actionKind?: ActionKind } {
+export function presetForPath(
+  path: string[],
+  root: TreeNode = ACTION_TREE,
+): { presetId?: string; actionKind?: ActionKind } {
   let presetId: string | undefined;
   let actionKind: ActionKind | undefined;
-  for (const { chosen } of resolvePath(path)) {
+  for (const { chosen } of resolvePath(path, root)) {
     if (!chosen?.presetId) continue;
     presetId = chosen.presetId;
     actionKind = chosen.actionKind; // сбрасывается вместе со сменой чарта

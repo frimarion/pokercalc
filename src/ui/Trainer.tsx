@@ -47,6 +47,7 @@ function Card({ rank, suit }: { rank: string; suit: SuitIndex }) {
 /** Группы спотов — ими выбирается, что тренировать. */
 const GROUPS: PresetGroup[] = [
   "RFI",
+  "ISO",
   "SB3BET",
   "BBDEF",
   "3BETIP",

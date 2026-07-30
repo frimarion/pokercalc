@@ -53,13 +53,13 @@ function neighbours(label: string): string[] {
   return out;
 }
 
-/** Вес ярлыка в одном действии чарта (0 / 0.25 / 0.5 / 0.75 / 1). */
+/** Вес ярлыка в одном действии чарта: 0..1 (у кэш-чартов — кратно 0.25). */
 function weightIn(action: RangePreset["actions"][number], label: string): number {
   if (action.always.includes(label)) return 1;
   if (action.threeQuarter?.includes(label)) return 0.75;
   if (action.situational.includes(label)) return 0.5;
   if (action.quarter?.includes(label)) return 0.25;
-  return 0;
+  return action.mixed?.[label] ?? 0;
 }
 
 /**
@@ -179,7 +179,10 @@ export interface QuizSpot {
 function raiseLabel(p: RangePreset): string {
   switch (p.group) {
     case "RFI":
+    case "MTTRFI":
       return "Открыть рейзом";
+    case "ISO":
+      return "Изолировать рейзом";
     case "DEF3BETIP":
     case "DEF3BETOOP":
       return "4бет";
@@ -203,6 +206,10 @@ function situationOf(p: RangePreset): string {
   switch (p.group) {
     case "RFI":
       return `Вы на ${p.position}. Все до вас сфолдили.`;
+    case "ISO":
+      return `Вы на ${p.position}. До вас лимп.`;
+    case "MTTRFI":
+      return `Вы на ${p.position}, 8-max, 100bb. Все до вас сфолдили.`;
     case "SB3BET":
       return `Вы на SB. ${seat} открыл рейзом${size}, остальные сфолдили.`;
     case "BBDEF":
@@ -219,10 +226,27 @@ function situationOf(p: RangePreset): string {
   }
 }
 
+/**
+ * Подпись пассивного действия. «Колл» подходит не везде: на MTT-SB это лимп,
+ * а на изолэйте с SB — доставка блайнда до целого, там подпись берётся из
+ * самого чарта.
+ */
+function callLabel(p: RangePreset): string {
+  if (p.group === "MTTRFI") return "Лимп";
+  if (p.group === "ISO") {
+    const call = p.actions.find((a) => a.kind === "call");
+    if (call) return call.label.charAt(0).toUpperCase() + call.label.slice(1);
+  }
+  return "Колл";
+}
+
 /** Все споты, по которым можно спрашивать. */
 export const QUIZ_SPOTS: QuizSpot[] = ALL_PRESETS.map((p) => {
   const answers: { key: QuizAnswer; label: string }[] = [{ key: "fold", label: "Фолд" }];
-  if (p.actions.some((a) => a.kind === "call")) answers.push({ key: "call", label: "Колл" });
+  const call = p.actions.find((a) => a.kind === "call");
+  // Пассивная линия называется по-разному: на MTT-SB это лимп, на изолэйте
+  // с SB — доставка блайнда. Подпись берём из чарта, где она уже задана.
+  if (call) answers.push({ key: "call", label: callLabel(p) });
   if (p.actions.some((a) => a.kind === "raise")) {
     answers.push({ key: "raise", label: raiseLabel(p) });
   }

@@ -5,10 +5,11 @@ import {
   SB3BET_PRESETS,
   BBDEF_PRESETS,
   THREEBET_IP_PRESETS,
-  SITUATIONAL_WEIGHT,
+  partialWeights,
   RangePreset,
   ActionKind,
-  ACTION_TREE,
+  FORMATS,
+  MTT_RFI_PRESETS,
   TreeNode,
   TreeOption,
   presetById,
@@ -37,8 +38,8 @@ function presetRange(p: RangePreset, kind?: ActionKind): Range {
   for (const a of p.actions) {
     if (kind && a.kind !== kind) continue;
     for (const h of a.always) r.setHand(h, 1);
-    for (const h of a.situational) {
-      r.setHand(h, Math.min(1, r.handWeight(h) + SITUATIONAL_WEIGHT));
+    for (const [h, w] of partialWeights(a)) {
+      r.setHand(h, Math.min(1, r.handWeight(h) + w));
     }
   }
   return r;
@@ -51,7 +52,7 @@ describe("пресеты Green Charts — общее", () => {
   it("все ярлыки валидны, внутри действия без дублей", () => {
     for (const p of ALL_PRESETS) {
       for (const a of p.actions) {
-        const all = [...a.always, ...a.situational];
+        const all = [...a.always, ...a.situational, ...Object.keys(a.mixed ?? {})];
         expect(new Set(all).size, `${p.id}/${a.kind}: дубликаты`).toBe(all.length);
         for (const label of all) {
           expect(() => comboIndicesForLabel(label), `${p.id}: ${label}`).not.toThrow();
@@ -66,12 +67,28 @@ describe("пресеты Green Charts — общее", () => {
     for (const p of ALL_PRESETS) expect(p.actions.length, p.id).toBeGreaterThan(0);
   });
 
-  it("AA всегда разыгрывается агрессивно, а не пассивно", () => {
+  it("AA разыгрывается преимущественно агрессивно", () => {
+    // Порог, а не «всегда»: солверные MTT-чарты играют часть AA лимпом с SB,
+    // но рейз всё равно должен оставаться основной линией.
     for (const p of ALL_PRESETS) {
-      const raiseAlways = p.actions
-        .filter((a) => a.kind === "raise")
-        .flatMap((a) => a.always);
-      expect(raiseAlways, `${p.id}: AA не в рейзе`).toContain("AA");
+      const w = handWeights(p, "AA");
+      expect(w.raise, `${p.id}: AA рейзится лишь ${w.raise}`).toBeGreaterThan(0.5);
+    }
+  });
+
+  it("веса лежат в 0..1 и в сумме не превышают единицу", () => {
+    for (const p of ALL_PRESETS) {
+      for (const a of p.actions) {
+        for (const [h, w] of Object.entries(a.mixed ?? {})) {
+          expect(w, `${p.id}/${a.kind}: ${h} = ${w}`).toBeGreaterThan(0);
+          expect(w, `${p.id}/${a.kind}: ${h} = ${w}`).toBeLessThan(1);
+        }
+      }
+      for (const label of ["AA", "72o", "K9s", "55"]) {
+        const w = handWeights(p, label);
+        expect(w.raise + w.call, `${p.id}: ${label} играется чаще, чем всегда`)
+          .toBeLessThanOrEqual(1.01);
+      }
     }
   });
 });
@@ -101,7 +118,12 @@ describe("тренажёр", () => {
     for (const p of ALL_PRESETS) {
       const hands = spot(p.id)?.hands ?? [];
       for (const a of p.actions) {
-        const mixed = [...(a.threeQuarter ?? []), ...a.situational, ...(a.quarter ?? [])];
+        const mixed = [
+          ...(a.threeQuarter ?? []),
+          ...a.situational,
+          ...(a.quarter ?? []),
+          ...Object.keys(a.mixed ?? {}),
+        ];
         for (const h of mixed) {
           expect(hands, `${p.id}: смешанная ${h} не спрашивается`).toContain(h);
         }
@@ -172,7 +194,7 @@ describe("тренажёр", () => {
   });
 });
 
-describe("ветка событий", () => {
+describe.each(FORMATS)("ветка событий — $label", ({ tree, key: formatKey }) => {
   /** Все опции дерева вместе с путём до них. */
   function walk(node: TreeNode, path: string[] = []): { path: string[]; option: TreeOption }[] {
     return node.options.flatMap((o) => {
@@ -181,7 +203,16 @@ describe("ветка событий", () => {
     });
   }
 
-  const all = walk(ACTION_TREE);
+  const all = walk(tree);
+
+  // MTT-чарты пока заглушка (mtt/rfi.ts пустой), поэтому и дерево MTT пустое.
+  // Тесты под него написаны заранее и включатся сами, как только
+  // tools/gen_mtt_rfi.py заполнит пресеты, — снимать skip руками не нужно.
+  const pending = all.length === 0;
+
+  it.skipIf(pending)("непустое дерево", () => {
+    expect(all.length, formatKey).toBeGreaterThan(0);
+  });
 
   it("каждый чарт в дереве существует, а фильтр действия в нём есть", () => {
     for (const { option } of all) {
@@ -203,14 +234,14 @@ describe("ветка событий", () => {
       expect(new Set(keys).size, `дубли ключей в «${node.title}»`).toBe(keys.length);
       for (const o of node.options) if (o.next) check(o.next);
     };
-    check(ACTION_TREE);
+    check(tree);
   });
 
-  it("путь до листа выбирает непустой диапазон", () => {
+  it.skipIf(pending)("путь до листа выбирает непустой диапазон", () => {
     const leaves = all.filter(({ option }) => !option.next);
     expect(leaves.length).toBeGreaterThan(0);
     for (const { path } of leaves) {
-      const { presetId, actionKind } = presetForPath(path);
+      const { presetId, actionKind } = presetForPath(path, tree);
       expect(presetId, `путь ${path.join("/")} без чарта`).toBeDefined();
       const p = presetById(presetId!)!;
       expect(pct(p, actionKind), `путь ${path.join("/")} пустой`).toBeGreaterThan(0);
@@ -304,6 +335,49 @@ describe("BB — защита", () => {
     const bb = BBDEF_PRESETS.find((p) => p.id === "bbdef-vs-bu-25")!;
     const sb = SB3BET_PRESETS.find((p) => p.id === "sb3bet-vs-bu")!;
     expect(pct(bb)).toBeGreaterThan(pct(sb));
+  });
+});
+
+// Тот же приём, что и с деревом: пока mtt/rfi.ts — заглушка, блок пропущен
+// и включится сам после оцифровки. См. CLAUDE.md, раздел про MTT.
+describe.skipIf(MTT_RFI_PRESETS.length === 0)("MTT RFI", () => {
+  const seat = (s: string) => MTT_RFI_PRESETS.find((p) => p.position === s)!;
+
+  it("оцифрованы все семь мест 8-max", () => {
+    expect(MTT_RFI_PRESETS.map((p) => p.position)).toEqual([
+      "UTG", "UTG1", "LJ", "HJ", "CO", "BTN", "SB",
+    ]);
+  });
+
+  it("диапазоны расширяются от UTG к SB", () => {
+    const widths = MTT_RFI_PRESETS.map((p) => pct(p));
+    for (let i = 1; i < widths.length; i++) {
+      expect(widths[i], `${MTT_RFI_PRESETS[i].id} шире`).toBeGreaterThan(widths[i - 1]);
+    }
+  });
+
+  it("частоты не округлены до четвертей — иначе это не солверный чарт", () => {
+    const freqs = MTT_RFI_PRESETS.flatMap((p) =>
+      p.actions.flatMap((a) => Object.values(a.mixed ?? {})),
+    );
+    expect(freqs.length, "нет ни одной смешанной руки").toBeGreaterThan(50);
+    const offQuarter = freqs.filter((w) => Math.abs(w * 4 - Math.round(w * 4)) > 0.01);
+    expect(offQuarter.length, "все частоты кратны 0.25").toBeGreaterThan(10);
+  });
+
+  it("лимп есть только на SB", () => {
+    for (const p of MTT_RFI_PRESETS) {
+      const hasCall = p.actions.some((a) => a.kind === "call");
+      expect(hasCall, `${p.id}: лимп`).toBe(p.position === "SB");
+    }
+  });
+
+  it("MTT-диапазоны ранних позиций шире кэшевых — антепот и меньше рейков", () => {
+    // 8-max UTG против 6-max UTG: та же роль первого игрока, но за столом
+    // больше соперников, а анте расширяет опен. Сверяем порядок величин.
+    expect(pct(seat("UTG"))).toBeGreaterThan(10);
+    expect(pct(seat("BTN"))).toBeGreaterThan(40);
+    expect(pct(seat("SB"))).toBeGreaterThan(pct(seat("BTN")));
   });
 });
 
