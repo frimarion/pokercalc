@@ -159,6 +159,74 @@ describe("выбор чарта по споту", () => {
     expect(ds[1].note).toContain("в позиции");
   });
 
+  it("3бет с блайнда и 4бет опенера — третье решение раздачи", () => {
+    const ds = decisionsOf(makeHand({
+      hero: "BB",
+      cards: "AhKh",
+      preflop: [
+        { who: "UTG", type: "fold" }, { who: "MP", type: "fold" },
+        { who: "CO", type: "raise", to: 2.5 },
+        { who: "BU", type: "fold" }, { who: "SB", type: "fold" },
+        { who: "BB", type: "raise", to: 10 },
+        { who: "CO", type: "raise", to: 24 },
+        { who: "BB", type: "call", bb: 14 },
+      ],
+    }));
+    expect(ds.map((d) => d.kind)).toEqual(["bbdef", "blinds4bet"]);
+    expect(ds[1]).toMatchObject({ presetId: "blinds4bet-vs-co", spot: "BB vs 4бет CO", action: "call" });
+    // Оба решения указывают на разные ходы героя.
+    expect(ds[0].actionIndex).not.toBe(ds[1].actionIndex);
+  });
+
+  it("4бет BU — чарт по сайзингу его опена", () => {
+    const vsBu = (to: number) => decisionsOf(makeHand({
+      hero: "SB",
+      cards: "AhKh",
+      preflop: [
+        ...foldsBefore(ALL, "BU"),
+        { who: "BU", type: "raise", to },
+        { who: "SB", type: "raise", to: 10 },
+        { who: "BB", type: "fold" },
+        { who: "BU", type: "raise", to: 24 },
+        { who: "SB", type: "fold" },
+      ],
+    }))[1];
+    expect(vsBu(2.5).presetId).toBe("blinds4bet-vs-bu-25");
+    expect(vsBu(3).presetId).toBe("blinds4bet-vs-bu-3");
+  });
+
+  it("4бет от SB против BB — свой чарт", () => {
+    const ds = decisionsOf(makeHand({
+      hero: "BB",
+      cards: "AhKh",
+      preflop: [
+        ...foldsBefore(ALL, "SB"),
+        { who: "SB", type: "raise", to: 3 },
+        { who: "BB", type: "raise", to: 10 },
+        { who: "SB", type: "raise", to: 25 },
+        { who: "BB", type: "raise", to: 100, allIn: true },
+      ],
+    }));
+    expect(ds[1]).toMatchObject({ presetId: "blinds4bet-bb-vs-sb", action: "raise" });
+  });
+
+  it("5бет+ и сквизы после 4бета чартом не покрыты", () => {
+    // Между 4бетом и ответом героя влез ещё один рейз — спот уже не тот.
+    const ds = decisionsOf(makeHand({
+      hero: "SB",
+      cards: "AhKh",
+      preflop: [
+        { who: "UTG", type: "raise", to: 3 }, { who: "MP", type: "fold" },
+        { who: "CO", type: "fold" }, { who: "BU", type: "fold" },
+        { who: "SB", type: "raise", to: 12 },
+        { who: "BB", type: "raise", to: 30 },
+        { who: "UTG", type: "fold" },
+        { who: "SB", type: "fold" },
+      ],
+    }));
+    expect(ds.some((d) => d.kind === "blinds4bet")).toBe(false);
+  });
+
   it("SB открыл, BB 3бетнул — опенер остаётся вне позиции", () => {
     const ds = decisionsOf(makeHand({
       hero: "SB",

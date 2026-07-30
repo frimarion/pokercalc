@@ -19,7 +19,8 @@ import { presetWidthPct } from "../presets/tree";
 import { ActionKind, RangePreset } from "../presets/types";
 import { Hand, HandAction, Position, heroPlayer } from "./types";
 
-export type SpotKind = "rfi" | "iso" | "sb3bet" | "bbdef" | "3betip" | "def3bet";
+export type SpotKind =
+  | "rfi" | "iso" | "sb3bet" | "bbdef" | "3betip" | "def3bet" | "blinds4bet";
 
 export const SPOT_LABELS: Record<SpotKind, string> = {
   rfi: "Опен (RFI)",
@@ -28,10 +29,11 @@ export const SPOT_LABELS: Record<SpotKind, string> = {
   bbdef: "BB — защита",
   "3betip": "3бет в позиции",
   def3bet: "Ответ на 3бет",
+  blinds4bet: "Блайнд vs 4бет",
 };
 
 export const SPOT_ORDER: SpotKind[] = [
-  "rfi", "iso", "3betip", "sb3bet", "bbdef", "def3bet",
+  "rfi", "iso", "3betip", "sb3bet", "bbdef", "def3bet", "blinds4bet",
 ];
 
 export type HeroAction = ActionKind | "fold";
@@ -234,6 +236,36 @@ function defenseSpot(pos: Position, raiser: Position): Spot | null {
   };
 }
 
+/**
+ * Чарт «блайнды vs 4бет» по месту опенера, который 4бетнул. У BU их два —
+ * под сайзинг его опена, как и в защите BB. 4бет от самого SB против BB —
+ * отдельный чарт: там 4бетит блайнд, а не поздняя позиция.
+ */
+function blinds4betSpot(pos: Position, opener: Position, openTo: number, bb: number): Spot | null {
+  if (pos !== "SB" && pos !== "BB") return null;
+  if (opener === "SB") {
+    // Против опена SB 3бетить мог только BB.
+    return pos === "BB"
+      ? { kind: "blinds4bet", presetId: "blinds4bet-bb-vs-sb", spot: "BB vs 4бет SB" }
+      : null;
+  }
+  if (opener === "BB") return null;
+  if (opener === "BU") {
+    const big = openTo > bb * 2.75;
+    return {
+      kind: "blinds4bet",
+      presetId: big ? "blinds4bet-vs-bu-3" : "blinds4bet-vs-bu-25",
+      spot: `${pos} vs 4бет BU`,
+      note: `опен ${(openTo / bb).toFixed(1)}bb → чарт ${big ? "3bb" : "2.5bb"}`,
+    };
+  }
+  return {
+    kind: "blinds4bet",
+    presetId: `blinds4bet-vs-${opener.toLowerCase()}`,
+    spot: `${pos} vs 4бет ${opener}`,
+  };
+}
+
 function build(
   h: Hand,
   label: string,
@@ -303,6 +335,25 @@ export function decisionsOf(h: Hand): Decision[] {
       const raiser = h.players.find((p) => p.name === pre[tbIdx].a.player);
       if (answer && raiser && !extraRaise) {
         const spot = defenseSpot(pos, raiser.position);
+        const d = spot && build(h, label, pos, spot, answer, pre[answerIdx].i, net);
+        if (d) out.push(d);
+      }
+    }
+  }
+
+  // Зеркальный спот: герой 3бетнул с блайнда, опенер ответил 4бетом.
+  if ((opening?.kind === "sb3bet" || opening?.kind === "bbdef") && pre[firstIdx].a.type === "raise") {
+    const openIdx = pre.findIndex(({ a }, i) => i < firstIdx && a.type === "raise");
+    const fbIdx = pre.findIndex(({ a }, i) => i > firstIdx && a.type === "raise");
+    if (openIdx >= 0 && fbIdx >= 0) {
+      const answerIdx = pre.findIndex(({ a }, i) => i > fbIdx && a.player === hero.name);
+      // Только прямой 4бет опенера: сквизы и 5бет+ чарт уже не описывает.
+      const extraRaise = pre.some(({ a }, i) => i > fbIdx && i < answerIdx && a.type === "raise");
+      const fourBetter = h.players.find((p) => p.name === pre[fbIdx].a.player);
+      const answer = answerIdx >= 0 ? actionOf(pre[answerIdx].a) : null;
+      const sameSeat = fourBetter?.name === pre[openIdx].a.player;
+      if (answer && fourBetter && sameSeat && !extraRaise) {
+        const spot = blinds4betSpot(pos, fourBetter.position, pre[openIdx].a.to ?? 0, h.bb);
         const d = spot && build(h, label, pos, spot, answer, pre[answerIdx].i, net);
         if (d) out.push(d);
       }

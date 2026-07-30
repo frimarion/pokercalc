@@ -14,6 +14,8 @@ import {
   TreeOption,
   presetById,
   presetForPath,
+  presetWidthPct,
+  BLINDS4BET_PRESETS,
 } from ".";
 import {
   QUIZ_SPOTS,
@@ -30,7 +32,9 @@ function handsBelow(hand: string, edge: string): string[] {
   const i = family.indexOf(edge);
   return i < 0 ? [] : family.slice(i + 1);
 }
-import { Range, comboIndicesForLabel } from "../engine/combos";
+import { Range, comboIndicesForLabel, gridCells } from "../engine/combos";
+
+const GRID = gridCells();
 
 /** Диапазон пресета: все действия (или только заданное) с их весами. */
 function presetRange(p: RangePreset, kind?: ActionKind): Range {
@@ -67,12 +71,26 @@ describe("пресеты Green Charts — общее", () => {
     for (const p of ALL_PRESETS) expect(p.actions.length, p.id).toBeGreaterThan(0);
   });
 
+  it("AA всегда в игре и никогда не фолдится", () => {
+    for (const p of ALL_PRESETS) {
+      const w = handWeights(p, "AA");
+      expect(w.raise + w.call, `${p.id}: AA разыгрывается лишь ${w.raise + w.call}`)
+        .toBeCloseTo(1, 5);
+    }
+  });
+
   it("AA разыгрывается преимущественно агрессивно", () => {
     // Порог, а не «всегда»: солверные MTT-чарты играют часть AA лимпом с SB,
     // но рейз всё равно должен оставаться основной линией.
+    //
+    // Защита блайндов от 4бета — исключение, и не техническое: там агрессия
+    // это 5бет-пуш на 100bb, и чарт осознанно оставляет половину AA в колле,
+    // чтобы не остаться без сильных рук в коллирующем диапазоне. Проверяем,
+    // что пуш хотя бы наравне с коллом.
     for (const p of ALL_PRESETS) {
       const w = handWeights(p, "AA");
-      expect(w.raise, `${p.id}: AA рейзится лишь ${w.raise}`).toBeGreaterThan(0.5);
+      const floor = p.group === "BLINDS4BET" ? 0.5 : 0.5001;
+      expect(w.raise, `${p.id}: AA рейзится лишь ${w.raise}`).toBeGreaterThanOrEqual(floor);
     }
   });
 
@@ -395,6 +413,64 @@ describe("3бет IP", () => {
     const widths = THREEBET_IP_PRESETS.map((p) => pct(p));
     for (let i = 1; i < widths.length; i++) {
       expect(widths[i], `${THREEBET_IP_PRESETS[i].id} шире`).toBeGreaterThan(widths[i - 1]);
+    }
+  });
+});
+
+describe("Blinds Defense vs 4bet (стр. 8)", () => {
+  const byId = (id: string) => ALL_PRESETS.find((x) => x.id === id)!;
+
+  // На стр. 8 в заголовках чартов НЕТ подписанных процентов, поэтому обычная
+  // сверка ширины тут невозможна. Вместо неё — структурный инвариант:
+  // защищаться от 4бета можно только той рукой, которой ты и 3бетнул.
+  // Чарты SB|BB объединяют оба блайнда, значит рука должна найтись хотя бы
+  // в одном из двух 3бет-диапазонов.
+  const SOURCES: [string, string[]][] = [
+    ["blinds4bet-vs-utg", ["sb3bet-vs-utg", "bbdef-vs-utg"]],
+    ["blinds4bet-vs-mp", ["sb3bet-vs-mp", "bbdef-vs-mp"]],
+    ["blinds4bet-vs-co", ["sb3bet-vs-co", "bbdef-vs-co"]],
+    ["blinds4bet-vs-bu-25", ["sb3bet-vs-bu", "bbdef-vs-bu-25"]],
+    ["blinds4bet-vs-bu-3", ["sb3bet-vs-bu", "bbdef-vs-bu-3"]],
+    ["blinds4bet-bb-vs-sb", ["bbdef-vs-sb"]],
+  ];
+
+  it.each(SOURCES)("%s — весь диапазон умещается в 3бет с блайнда", (id, sources) => {
+    const defense = byId(id);
+    for (const cell of GRID.flat()) {
+      const w = handWeights(defense, cell.label);
+      if (w.raise + w.call < 0.01) continue;
+      const canThreeBet = sources.some(
+        (s) => handWeights(byId(s), cell.label).raise > 0.01,
+      );
+      expect(canThreeBet, `${id}: ${cell.label} защищается, но не 3бетится`).toBe(true);
+    }
+  });
+
+  it("против SB защищаемся шире, чем против UTG", () => {
+    // Чем шире 4бет соперника, тем шире защита. SB 4бетит сильно шире UTG.
+    const width = (id: string) => presetWidthPct(byId(id));
+    expect(width("blinds4bet-bb-vs-sb")).toBeGreaterThan(width("blinds4bet-vs-co"));
+    expect(width("blinds4bet-vs-co")).toBeGreaterThan(width("blinds4bet-vs-utg"));
+  });
+
+  it("жёлтый — это ситуативный колл, а не отдельное решение", () => {
+    for (const p of BLINDS4BET_PRESETS) {
+      const yellow = p.actions.filter((a) => a.color === "yellow");
+      for (const a of yellow) {
+        expect(a.kind, `${p.id}: жёлтое действие должно быть коллом`).toBe("call");
+        // Жёлтые ячейки на чарте сплошные, но играются не всегда → вес 0.5.
+        expect(a.always, `${p.id}: жёлтый не бывает полным весом`).toEqual([]);
+        expect(a.situational.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("пуш и колл вместе не превышают единицу", () => {
+    for (const p of BLINDS4BET_PRESETS) {
+      for (const cell of GRID.flat()) {
+        const w = handWeights(p, cell.label);
+        expect(w.raise + w.call, `${p.id}: ${cell.label}`).toBeLessThanOrEqual(1.0001);
+      }
     }
   });
 });

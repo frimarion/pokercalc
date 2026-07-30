@@ -53,6 +53,7 @@ const GROUPS: PresetGroup[] = [
   "3BETIP",
   "DEF3BETIP",
   "DEF3BETOOP",
+  "BLINDS4BET",
 ];
 
 export function Trainer() {

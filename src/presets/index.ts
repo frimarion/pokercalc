@@ -11,6 +11,7 @@ import { SB3BET_PRESETS } from "./sbDefense";
 import { BBDEF_PRESETS } from "./bbDefense";
 import { THREEBET_IP_PRESETS } from "./threeBetIP";
 import { DEF3BETIP_PRESETS, DEF3BETOOP_PRESETS } from "./defenseVs3bet";
+import { BLINDS4BET_PRESETS } from "./blinds4bet";
 
 export type {
   RangePreset,
@@ -33,6 +34,7 @@ export { SB3BET_PRESETS } from "./sbDefense";
 export { BBDEF_PRESETS } from "./bbDefense";
 export { THREEBET_IP_PRESETS } from "./threeBetIP";
 export { DEF3BETIP_PRESETS, DEF3BETOOP_PRESETS } from "./defenseVs3bet";
+export { BLINDS4BET_PRESETS } from "./blinds4bet";
 export { MTT_RFI_PRESETS } from "./mtt/rfi";
 export { ALL_PRESETS, presetById } from "./all";
 
@@ -60,5 +62,6 @@ export const PRESET_GROUPS: { group: PresetGroup; presets: RangePreset[] }[] = [
   { group: "3BETIP", presets: THREEBET_IP_PRESETS },
   { group: "DEF3BETIP", presets: DEF3BETIP_PRESETS },
   { group: "DEF3BETOOP", presets: DEF3BETOOP_PRESETS },
+  { group: "BLINDS4BET", presets: BLINDS4BET_PRESETS },
   { group: "MTTRFI", presets: MTT_RFI_PRESETS },
 ];

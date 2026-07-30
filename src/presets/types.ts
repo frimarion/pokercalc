@@ -9,6 +9,7 @@ export type PresetGroup =
   | "3BETIP"
   | "DEF3BETIP"
   | "DEF3BETOOP"
+  | "BLINDS4BET"
   | "MTTRFI";
 
 /** Действие, которым разыгрывается часть диапазона. */
@@ -83,6 +84,7 @@ export const GROUP_LABELS: Record<PresetGroup, string> = {
   "3BETIP": "3бет IP — против опена",
   DEF3BETIP: "Защита на 3бет — в позиции",
   DEF3BETOOP: "Защита на 3бет — без позиции",
+  BLINDS4BET: "Блайнды — защита от 4бета",
   MTTRFI: "MTT · RFI — открытие",
 };
 

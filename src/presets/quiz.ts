@@ -186,6 +186,8 @@ function raiseLabel(p: RangePreset): string {
     case "DEF3BETIP":
     case "DEF3BETOOP":
       return "4бет";
+    case "BLINDS4BET":
+      return "5бет-пуш";
     default:
       return "3бет";
   }
@@ -216,6 +218,11 @@ function situationOf(p: RangePreset): string {
       return `Вы на BB. ${seat} открыл рейзом${size}, остальные сфолдили.`;
     case "3BETIP":
       return `Вы в позиции. Соперник открыл рейзом с диапазоном ${percent}%.`;
+    case "BLINDS4BET":
+      // «BB vs SB» — отдельный чарт: 4бетит сам SB, а не опенер с поздней.
+      return p.position.includes("BB vs SB")
+        ? "Вы 3бетнули с BB против опена SB, и SB ответил 4бетом."
+        : `Вы 3бетнули с блайнда, ${seat} ответил 4бетом${size}.`;
     case "DEF3BETIP":
       return `Вы открыли рейзом, блайнд 3бетнул. Его 3бет — ${percent}%, вы в позиции.`;
     case "DEF3BETOOP": {
