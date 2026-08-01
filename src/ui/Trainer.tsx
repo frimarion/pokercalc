@@ -7,8 +7,11 @@ import {
   isCorrect,
   actionEdges,
   familyLabel,
+  TRAINER_SECTIONS,
+  TrainerSection,
+  sectionGroupLabel,
 } from "../presets/quiz";
-import { GROUP_LABELS, PresetGroup, presetById } from "../presets";
+import { PresetGroup, presetById } from "../presets";
 import { SUIT_SYMBOLS, SuitIndex } from "../engine/cards";
 import { suitColor } from "./colors";
 
@@ -44,20 +47,12 @@ function Card({ rank, suit }: { rank: string; suit: SuitIndex }) {
   );
 }
 
-/** Группы спотов — ими выбирается, что тренировать. */
-const GROUPS: PresetGroup[] = [
-  "RFI",
-  "ISO",
-  "SB3BET",
-  "BBDEF",
-  "3BETIP",
-  "DEF3BETIP",
-  "DEF3BETOOP",
-  "BLINDS4BET",
-];
-
 export function Trainer() {
-  const [enabled, setEnabled] = useState<Set<PresetGroup>>(new Set(GROUPS));
+  // Кэш и MTT не смешиваются в одном прогоне: чарты разные и по сайзингам, и
+  // по глубине стека, а вопрос показывает только руку и спот — вперемешку
+  // было бы непонятно, по какому источнику отвечать.
+  const [section, setSection] = useState<TrainerSection>(TRAINER_SECTIONS[0]);
+  const [enabled, setEnabled] = useState<Set<PresetGroup>>(new Set(section.groups));
   const [question, setQuestion] = useState<Question | null>(null);
   const [cards, setCards] = useState<{ rank: string; suit: SuitIndex }[]>([]);
   const [answered, setAnswered] = useState<QuizAnswer | null>(null);
@@ -94,17 +89,29 @@ export function Trainer() {
     });
   };
 
+  /** Пул по набору групп — нужен и при смене формата, и при клике по группе. */
+  const poolOf = (groups: Set<PresetGroup>) =>
+    QUIZ_SPOTS.filter((s) => {
+      const g = presetById(s.presetId)?.group;
+      return g ? groups.has(g) : false;
+    });
+
   const toggleGroup = (g: PresetGroup) => {
     const next = new Set(enabled);
     if (next.has(g)) next.delete(g);
     else next.add(g);
     if (next.size === 0) return; // хотя бы одна группа должна остаться
     setEnabled(next);
-    const nextPool = QUIZ_SPOTS.filter((s) => {
-      const grp = presetById(s.presetId)?.group;
-      return grp ? next.has(grp) : false;
-    });
-    ask(nextPool);
+    ask(poolOf(next));
+  };
+
+  const switchSection = (s: TrainerSection) => {
+    if (s.key === section.key) return;
+    const groups = new Set(s.groups);
+    setSection(s);
+    setEnabled(groups);
+    // Счёт не сбрасываем: он про игрока, а не про источник чартов.
+    ask(poolOf(groups));
   };
 
   const pctRight = score.total > 0 ? (score.right / score.total) * 100 : 0;
@@ -116,24 +123,45 @@ export function Trainer() {
 
   return (
     <div className="mx-auto flex max-w-[760px] flex-col gap-4">
-      {/* Что тренируем */}
-      <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-white/10 bg-[#0d1210] px-3 py-2">
-        <span className="mr-1 text-[11px] uppercase tracking-wider text-neutral-500">
-          Тренируем
-        </span>
-        {GROUPS.map((g) => (
-          <button
-            key={g}
-            onClick={() => toggleGroup(g)}
-            className={`rounded-md px-2 py-1 text-[11px] font-semibold transition ${
-              enabled.has(g)
-                ? "bg-emerald-500 text-black"
-                : "border border-white/10 text-neutral-400 hover:bg-white/5"
-            }`}
-          >
-            {GROUP_LABELS[g]}
-          </button>
-        ))}
+      {/* Что тренируем: сначала формат, потом группы внутри него */}
+      <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-[#0d1210] px-3 py-2">
+        <div className="flex items-center gap-1.5">
+          <span className="mr-1 text-[11px] uppercase tracking-wider text-neutral-500">
+            Формат
+          </span>
+          {TRAINER_SECTIONS.map((s) => (
+            <button
+              key={s.key}
+              onClick={() => switchSection(s)}
+              className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition ${
+                s.key === section.key
+                  ? "bg-emerald-500 text-black"
+                  : "border border-white/10 text-neutral-400 hover:bg-white/5"
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+          <span className="ml-1 text-[11px] text-neutral-600">{section.note}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[11px] uppercase tracking-wider text-neutral-500">
+            Споты
+          </span>
+          {section.groups.map((g) => (
+            <button
+              key={g}
+              onClick={() => toggleGroup(g)}
+              className={`rounded-md px-2 py-1 text-[11px] font-semibold transition ${
+                enabled.has(g)
+                  ? "bg-emerald-500 text-black"
+                  : "border border-white/10 text-neutral-400 hover:bg-white/5"
+              }`}
+            >
+              {sectionGroupLabel(g)}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Счёт */}

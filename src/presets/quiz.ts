@@ -12,7 +12,7 @@
 // Всё, что окружено такими же руками с тем же действием (весь мусор и весь
 // премиум в середине своей зоны), из выборки исключается.
 
-import { ActionKind, RangePreset } from "./types";
+import { ActionKind, GROUP_LABELS, PresetGroup, RangePreset } from "./types";
 import { ALL_PRESETS } from "./all";
 import { gridCells, HandType } from "../engine/combos";
 
@@ -182,12 +182,18 @@ function raiseLabel(p: RangePreset): string {
     case "MTTRFI":
       return "Открыть рейзом";
     case "ISO":
+    case "MTTISO":
       return "Изолировать рейзом";
     case "DEF3BETIP":
     case "DEF3BETOOP":
+    case "MTTDEF3BET":
       return "4бет";
     case "BLINDS4BET":
       return "5бет-пуш";
+    case "MTTPUSH":
+      return "Олл-ин";
+    case "MTT3BETPUSH":
+      return "3бет-пуш";
     default:
       return "3бет";
   }
@@ -211,7 +217,26 @@ function situationOf(p: RangePreset): string {
     case "ISO":
       return `Вы на ${p.position}. До вас лимп.`;
     case "MTTRFI":
-      return `Вы на ${p.position}, 8-max, 100bb. Все до вас сфолдили.`;
+      return `Вы на ${p.position}, стек 25bb+. Все до вас сфолдили.`;
+    // MTT-чарты FF START: спот задаётся не только позицией, но и глубиной
+    // стека, и она уже вшита в position («EP · 10-14bb») или в группу.
+    case "MTTISO":
+      return p.position === "vs 2+"
+        ? "Вы против двух и больше лимперов — все они уже влимпили."
+        : `Вы на ${p.position}. До вас лимп.`;
+    case "MTTVSRFI":
+      return `Вы на позиции «${p.position}», стек 40bb+. Соперник открыл рейзом 2bb.`;
+    case "MTTBBDEF":
+      return `Вы на BB. Опен 2-2.2bb ${p.position.replace("vs ", "с ")} позиций.`;
+    case "MTTDEF3BET":
+      return `Вы открыли с ${p.position} и получили 3бет 5-7bb. Стек 40bb+.`;
+    case "MTTPUSH": {
+      // position здесь — «EP · 10-14bb»: место и стек, разделённые точкой.
+      const [seat, stack] = p.position.split(" · ");
+      return `Вы на ${seat}, стек ${stack}. Все до вас сфолдили, играем пуш или фолд.`;
+    }
+    case "MTT3BETPUSH":
+      return `Вы в споте «${p.position}», стек 16-22bb. Соперник открыл рейзом 2bb.`;
     case "SB3BET":
       return `Вы на SB. ${seat} открыл рейзом${size}, остальные сфолдили.`;
     case "BBDEF":
@@ -239,7 +264,7 @@ function situationOf(p: RangePreset): string {
  * самого чарта.
  */
 function callLabel(p: RangePreset): string {
-  if (p.group === "MTTRFI") return "Лимп";
+  if (p.group === "MTTISO") return "Оверлимп";
   if (p.group === "ISO") {
     const call = p.actions.find((a) => a.kind === "call");
     if (call) return call.label.charAt(0).toUpperCase() + call.label.slice(1);
@@ -281,6 +306,61 @@ export function questionWeights(p: RangePreset, hand: string): Record<QuizAnswer
 /** Ответ верен, если чарт играет руку так хоть какую-то долю времени. */
 export function isCorrect(q: Question, answer: QuizAnswer): boolean {
   return q.weights[answer] > 0.01;
+}
+
+/**
+ * Разбиение спотов по форматам — им управляется, что тренировать.
+ *
+ * Живёт здесь, а не в Trainer.tsx, ради теста: список групп в тренажёре уже
+ * один раз отстал от реальности — MTT-чарты оцифровались, попали в QUIZ_SPOTS,
+ * но в UI остались недоступны, потому что их забыли дописать в кнопки. Тест
+ * сверяет объединение секций со всеми группами, какие есть в чартах.
+ */
+export interface TrainerSection {
+  key: "cash" | "mtt";
+  label: string;
+  note: string;
+  groups: PresetGroup[];
+}
+
+export const TRAINER_SECTIONS: TrainerSection[] = [
+  {
+    key: "cash",
+    label: "Кэш",
+    note: "6-max · Green Charts",
+    groups: [
+      "RFI",
+      "ISO",
+      "SB3BET",
+      "BBDEF",
+      "3BETIP",
+      "DEF3BETIP",
+      "DEF3BETOOP",
+      "BLINDS4BET",
+    ],
+  },
+  {
+    key: "mtt",
+    label: "MTT",
+    note: "FF START · по глубине стека",
+    groups: [
+      "MTTRFI",
+      "MTTISO",
+      "MTTVSRFI",
+      "MTTDEF3BET",
+      "MTTBBDEF",
+      "MTTPUSH",
+      "MTT3BETPUSH",
+    ],
+  },
+];
+
+/**
+ * Подпись группы на кнопке внутри секции: префикс «MTT · » там лишний —
+ * формат уже выбран переключателем выше.
+ */
+export function sectionGroupLabel(group: PresetGroup): string {
+  return GROUP_LABELS[group].replace(/^MTT · /, "");
 }
 
 const pick = <T,>(xs: T[]): T => xs[Math.floor(Math.random() * xs.length)];

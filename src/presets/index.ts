@@ -5,6 +5,12 @@ import { RangePreset, PresetGroup } from "./types";
 import { TreeNode, ACTION_TREE } from "./tree";
 import { MTT_TREE } from "./mtt/tree";
 import { MTT_RFI_PRESETS } from "./mtt/rfi";
+import { MTT_ISO_PRESETS } from "./mtt/iso";
+import { MTT_VS_RFI_PRESETS } from "./mtt/vsRfi";
+import { MTT_DEF3BET_PRESETS } from "./mtt/defVs3bet";
+import { MTT_BBDEF_PRESETS } from "./mtt/bbDefense";
+import { MTT_PUSH_PRESETS } from "./mtt/push";
+import { MTT_3BETPUSH_PRESETS } from "./mtt/threeBetPush";
 import { RFI_PRESETS } from "./rfi";
 import { ISO_PRESETS } from "./iso";
 import { SB3BET_PRESETS } from "./sbDefense";
@@ -36,6 +42,12 @@ export { THREEBET_IP_PRESETS } from "./threeBetIP";
 export { DEF3BETIP_PRESETS, DEF3BETOOP_PRESETS } from "./defenseVs3bet";
 export { BLINDS4BET_PRESETS } from "./blinds4bet";
 export { MTT_RFI_PRESETS } from "./mtt/rfi";
+export { MTT_ISO_PRESETS } from "./mtt/iso";
+export { MTT_VS_RFI_PRESETS } from "./mtt/vsRfi";
+export { MTT_DEF3BET_PRESETS } from "./mtt/defVs3bet";
+export { MTT_BBDEF_PRESETS } from "./mtt/bbDefense";
+export { MTT_PUSH_PRESETS } from "./mtt/push";
+export { MTT_3BETPUSH_PRESETS } from "./mtt/threeBetPush";
 export { ALL_PRESETS, presetById } from "./all";
 
 export type { TreeNode, TreeOption, Seat } from "./tree";
@@ -50,7 +62,7 @@ export type FormatKey = "cash" | "mtt";
 
 export const FORMATS: { key: FormatKey; label: string; note: string; tree: TreeNode }[] = [
   { key: "cash", label: "Кэш", note: "6-max · Green Charts", tree: ACTION_TREE },
-  { key: "mtt", label: "MTT", note: "8-max · 100bb ChipEV", tree: MTT_TREE },
+  { key: "mtt", label: "MTT", note: "FF START · по глубине стека", tree: MTT_TREE },
 ];
 
 /** Пресеты, сгруппированные по типу чарта. */
@@ -64,4 +76,10 @@ export const PRESET_GROUPS: { group: PresetGroup; presets: RangePreset[] }[] = [
   { group: "DEF3BETOOP", presets: DEF3BETOOP_PRESETS },
   { group: "BLINDS4BET", presets: BLINDS4BET_PRESETS },
   { group: "MTTRFI", presets: MTT_RFI_PRESETS },
+  { group: "MTTISO", presets: MTT_ISO_PRESETS },
+  { group: "MTTVSRFI", presets: MTT_VS_RFI_PRESETS },
+  { group: "MTTDEF3BET", presets: MTT_DEF3BET_PRESETS },
+  { group: "MTTBBDEF", presets: MTT_BBDEF_PRESETS },
+  { group: "MTTPUSH", presets: MTT_PUSH_PRESETS },
+  { group: "MTT3BETPUSH", presets: MTT_3BETPUSH_PRESETS },
 ];

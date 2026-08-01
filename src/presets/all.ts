@@ -11,6 +11,12 @@ import { THREEBET_IP_PRESETS } from "./threeBetIP";
 import { DEF3BETIP_PRESETS, DEF3BETOOP_PRESETS } from "./defenseVs3bet";
 import { BLINDS4BET_PRESETS } from "./blinds4bet";
 import { MTT_RFI_PRESETS } from "./mtt/rfi";
+import { MTT_ISO_PRESETS } from "./mtt/iso";
+import { MTT_VS_RFI_PRESETS } from "./mtt/vsRfi";
+import { MTT_DEF3BET_PRESETS } from "./mtt/defVs3bet";
+import { MTT_BBDEF_PRESETS } from "./mtt/bbDefense";
+import { MTT_PUSH_PRESETS } from "./mtt/push";
+import { MTT_3BETPUSH_PRESETS } from "./mtt/threeBetPush";
 
 export const ALL_PRESETS: RangePreset[] = [
   ...RFI_PRESETS,
@@ -22,6 +28,12 @@ export const ALL_PRESETS: RangePreset[] = [
   ...DEF3BETOOP_PRESETS,
   ...BLINDS4BET_PRESETS,
   ...MTT_RFI_PRESETS,
+  ...MTT_ISO_PRESETS,
+  ...MTT_VS_RFI_PRESETS,
+  ...MTT_DEF3BET_PRESETS,
+  ...MTT_BBDEF_PRESETS,
+  ...MTT_PUSH_PRESETS,
+  ...MTT_3BETPUSH_PRESETS,
 ];
 
 export function presetById(id: string): RangePreset | undefined {

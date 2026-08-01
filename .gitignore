@@ -10,4 +10,9 @@ tools/__pycache__/
 page*.json
 *.png
 
+# ...но исходники MTT-пака FF START — версионируем: без них чарты не
+# перегенерировать. Отладочные оверлеи (--debug) по-прежнему мимо.
+!charts/**/*.png
+charts/**/*.debug.png
+
 .DS_Store

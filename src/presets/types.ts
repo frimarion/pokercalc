@@ -10,7 +10,13 @@ export type PresetGroup =
   | "DEF3BETIP"
   | "DEF3BETOOP"
   | "BLINDS4BET"
-  | "MTTRFI";
+  | "MTTRFI"
+  | "MTTISO"
+  | "MTTVSRFI"
+  | "MTTDEF3BET"
+  | "MTTBBDEF"
+  | "MTTPUSH"
+  | "MTT3BETPUSH";
 
 /** Действие, которым разыгрывается часть диапазона. */
 export type ActionKind = "raise" | "call";
@@ -47,7 +53,7 @@ export interface PresetAction {
   color?: ActionColor;
 }
 
-export type ActionColor = "green" | "red" | "purple" | "yellow";
+export type ActionColor = "green" | "red" | "purple" | "yellow" | "orange" | "pink";
 
 export function defaultActionColor(kind: ActionKind): ActionColor {
   return kind === "call" ? "green" : "red";
@@ -86,6 +92,12 @@ export const GROUP_LABELS: Record<PresetGroup, string> = {
   DEF3BETOOP: "Защита на 3бет — без позиции",
   BLINDS4BET: "Блайнды — защита от 4бета",
   MTTRFI: "MTT · RFI — открытие",
+  MTTISO: "MTT · Изолейт после лимпа",
+  MTTVSRFI: "MTT · Против опена — 3бет и колд-колл",
+  MTTDEF3BET: "MTT · Защита против 3бета",
+  MTTBBDEF: "MTT · Защита BB",
+  MTTPUSH: "MTT · Пуш-фолд на коротком стеке",
+  MTT3BETPUSH: "MTT · 3бет-пуш (рестил)",
 };
 
 /** Руки действия, играемые частично, вместе с весами. */

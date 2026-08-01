@@ -10,6 +10,12 @@ import {
   ActionKind,
   FORMATS,
   MTT_RFI_PRESETS,
+  MTT_ISO_PRESETS,
+  MTT_VS_RFI_PRESETS,
+  MTT_DEF3BET_PRESETS,
+  MTT_BBDEF_PRESETS,
+  MTT_PUSH_PRESETS,
+  MTT_3BETPUSH_PRESETS,
   TreeNode,
   TreeOption,
   presetById,
@@ -24,6 +30,7 @@ import {
   actionEdges,
   handWeights,
   handFamily,
+  TRAINER_SECTIONS,
 } from "./quiz";
 
 /** Руки того же ряда, что стоят ниже указанной границы. */
@@ -145,6 +152,32 @@ describe("тренажёр", () => {
         for (const h of mixed) {
           expect(hands, `${p.id}: смешанная ${h} не спрашивается`).toContain(h);
         }
+      }
+    }
+  });
+
+  it("каждая группа чартов доступна в тренажёре", () => {
+    // Именно этот инвариант однажды сломался молча: MTT-чарты оцифровались и
+    // попали в QUIZ_SPOTS, но список групп в UI остался старым, и до них
+    // нельзя было добраться ни одной кнопкой.
+    const covered = new Set(TRAINER_SECTIONS.flatMap((s) => s.groups));
+    const existing = new Set(ALL_PRESETS.map((p) => p.group));
+    for (const g of existing) {
+      expect(covered.has(g), `группа ${g} не попала ни в одну секцию тренажёра`).toBe(true);
+    }
+    for (const g of covered) {
+      expect(existing.has(g), `секция тренажёра ссылается на пустую группу ${g}`).toBe(true);
+    }
+  });
+
+  it("в каждой секции тренажёра есть о чём спрашивать", () => {
+    for (const s of TRAINER_SECTIONS) {
+      const spots = QUIZ_SPOTS.filter(
+        (q) => s.groups.includes(presetById(q.presetId)!.group),
+      );
+      expect(spots.length, `секция ${s.key} пуста`).toBeGreaterThan(0);
+      for (const spot of spots) {
+        expect(spot.hands.length, `${spot.presetId}: не о чем спрашивать`).toBeGreaterThan(3);
       }
     }
   });
@@ -356,46 +389,122 @@ describe("BB — защита", () => {
   });
 });
 
-// Тот же приём, что и с деревом: пока mtt/rfi.ts — заглушка, блок пропущен
-// и включится сам после оцифровки. См. CLAUDE.md, раздел про MTT.
-describe.skipIf(MTT_RFI_PRESETS.length === 0)("MTT RFI", () => {
-  const seat = (s: string) => MTT_RFI_PRESETS.find((p) => p.position === s)!;
+// MTT-чарты FF START (charts/mtt, оцифровано tools/extract_ffstart.py).
+describe("MTT — FF START", () => {
+  const byId = (id: string) => presetById(id)!;
+  const MTT_PRESETS = [
+    ...MTT_RFI_PRESETS,
+    ...MTT_ISO_PRESETS,
+    ...MTT_VS_RFI_PRESETS,
+    ...MTT_DEF3BET_PRESETS,
+    ...MTT_BBDEF_PRESETS,
+    ...MTT_PUSH_PRESETS,
+    ...MTT_3BETPUSH_PRESETS,
+  ];
 
-  it("оцифрованы все семь мест 8-max", () => {
+  it("оцифрованы все страницы пака", () => {
     expect(MTT_RFI_PRESETS.map((p) => p.position)).toEqual([
-      "UTG", "UTG1", "LJ", "HJ", "CO", "BTN", "SB",
+      "EP+1", "EP+2", "MP", "HJ", "CO", "BU",
     ]);
+    expect(MTT_ISO_PRESETS).toHaveLength(8);
+    expect(MTT_VS_RFI_PRESETS).toHaveLength(4);
+    expect(MTT_DEF3BET_PRESETS).toHaveLength(6);
+    expect(MTT_BBDEF_PRESETS).toHaveLength(3);
+    expect(MTT_PUSH_PRESETS).toHaveLength(10);
+    expect(MTT_3BETPUSH_PRESETS).toHaveLength(5);
   });
 
-  it("диапазоны расширяются от UTG к SB", () => {
-    const widths = MTT_RFI_PRESETS.map((p) => pct(p));
-    for (let i = 1; i < widths.length; i++) {
-      expect(widths[i], `${MTT_RFI_PRESETS[i].id} шире`).toBeGreaterThan(widths[i - 1]);
+  it("чарты бинарные — рука играется одним действием целиком", () => {
+    // У FF START нет ни долей, ни составных ячеек (в отличие от Green Charts
+    // и от солверных чартов). Если тут появятся дробные веса — значит, при
+    // извлечении цвет ячейки прочитался неоднозначно.
+    for (const p of MTT_PRESETS) {
+      for (const a of p.actions) {
+        expect(partialWeights(a), `${p.id}: дробные веса`).toEqual([]);
+      }
+      for (const cell of GRID.flat()) {
+        const total = handWeights(p, cell.label).raise + handWeights(p, cell.label).call;
+        expect(total === 0 || total === 1, `${p.id}/${cell.label}: вес ${total}`).toBe(true);
+      }
     }
   });
 
-  it("частоты не округлены до четвертей — иначе это не солверный чарт", () => {
-    const freqs = MTT_RFI_PRESETS.flatMap((p) =>
-      p.actions.flatMap((a) => Object.values(a.mixed ?? {})),
-    );
-    expect(freqs.length, "нет ни одной смешанной руки").toBeGreaterThan(50);
-    const offQuarter = freqs.filter((w) => Math.abs(w * 4 - Math.round(w * 4)) > 0.01);
-    expect(offQuarter.length, "все частоты кратны 0.25").toBeGreaterThan(10);
+  // Главная сверка оцифровки: процент подписан прямо на чарте, и он обязан
+  // сойтись с фактической шириной диапазона. Проценты относятся к агрессивной
+  // линии (изолейт/пуш/опен), пассивная линия на чартах не подписана.
+  it.each([
+    ["mtt-rfi-ep1", 16], ["mtt-rfi-ep2", 19], ["mtt-rfi-mp", 22],
+    ["mtt-rfi-hj", 27], ["mtt-rfi-co", 37], ["mtt-rfi-bu", 54],
+    ["mtt-iso-ep", 14], ["mtt-iso-mp", 19], ["mtt-iso-hj", 23],
+    ["mtt-iso-multi", 17], ["mtt-iso-co", 26], ["mtt-iso-bu", 37],
+    ["mtt-iso-sb", 12], ["mtt-iso-bb", 14],
+    ["mtt-push-9-ep1", 14], ["mtt-push-9-mp", 23], ["mtt-push-9-co", 34],
+    ["mtt-push-9-bu", 44], ["mtt-push-9-sb", 73],
+    ["mtt-push-14-ep", 10], ["mtt-push-14-mp", 18], ["mtt-push-14-co", 28],
+    ["mtt-push-14-bu", 34], ["mtt-push-14-sb", 63],
+    ["mtt-threebetpush-early-vs-early", 5],
+    ["mtt-threebetpush-mid-vs-early", 7],
+    ["mtt-threebetpush-late-vs-late", 13],
+    ["mtt-threebetpush-blinds-vs-early", 6],
+    ["mtt-threebetpush-blinds-vs-late", 22],
+  ])("%s — ширина сходится с подписанным процентом (%i%%)", (id, want) => {
+    // Допуск 1.5 п.п., а не десятая доля: подписи на чартах округлены самим
+    // автором, и на двух чартах (изолейт CO 25.5 против 26, пуш MP 24.1
+    // против 23) расхождение больше половины процента. Ячейки там сверены
+    // с картинкой поштучно — расходится подпись, а не оцифровка. Порог всё
+    // равно ловит сдвиг на ряд или перепутанные местами чарты.
+    const got = pct(byId(id), "raise");
+    expect(Math.abs(got - want), `${id}: ${got.toFixed(1)}% против ${want}%`).toBeLessThan(1.5);
   });
 
-  it("лимп есть только на SB", () => {
-    for (const p of MTT_RFI_PRESETS) {
-      const hasCall = p.actions.some((a) => a.kind === "call");
-      expect(hasCall, `${p.id}: лимп`).toBe(p.position === "SB");
+  it("RFI вложены: каждая следующая позиция добавляет руки, не убирая", () => {
+    for (let i = 1; i < MTT_RFI_PRESETS.length; i++) {
+      const prev = presetRange(MTT_RFI_PRESETS[i - 1]);
+      const cur = presetRange(MTT_RFI_PRESETS[i]);
+      const lost = GRID.flat().filter(
+        (c) => prev.handWeight(c.label) > cur.handWeight(c.label),
+      ).map((c) => c.label);
+      expect(lost, `${MTT_RFI_PRESETS[i].id} потерял руки`).toEqual([]);
     }
   });
 
-  it("MTT-диапазоны ранних позиций шире кэшевых — антепот и меньше рейков", () => {
-    // 8-max UTG против 6-max UTG: та же роль первого игрока, но за столом
-    // больше соперников, а анте расширяет опен. Сверяем порядок величин.
-    expect(pct(seat("UTG"))).toBeGreaterThan(10);
-    expect(pct(seat("BTN"))).toBeGreaterThan(40);
-    expect(pct(seat("SB"))).toBeGreaterThan(pct(seat("BTN")));
+  it("защита от 3бета умещается в опен того же места", () => {
+    // Межстраничный инвариант: защищаться от 3бета можно только рукой,
+    // которой ты и открылся. Ловит перепутанные местами чарты страницы №4.
+    for (const p of MTT_DEF3BET_PRESETS) {
+      const open = presetRange(byId(`mtt-rfi-${p.id.split("-").pop()}`));
+      const def = presetRange(p);
+      const extra = GRID.flat().filter(
+        (c) => def.handWeight(c.label) > open.handWeight(c.label),
+      ).map((c) => c.label);
+      expect(extra, `${p.id}: защищаемся тем, чем не открывались`).toEqual([]);
+    }
+  });
+
+  it("чем короче стек, тем шире пуш", () => {
+    for (const seat of ["ep", "mp", "co", "bu", "sb"]) {
+      // На 0-9bb первая позиция подписана EP+1, на 10-14bb — EP.
+      const short = MTT_PUSH_PRESETS.find(
+        (p) => p.id.startsWith("mtt-push-9-") && p.id.includes(seat),
+      )!;
+      const deep = byId(`mtt-push-14-${seat}`);
+      expect(pct(short), `${seat}: 0-9bb против 10-14bb`).toBeGreaterThan(pct(deep));
+    }
+  });
+
+  it("BB защищается тем шире, чем позднее позиция опенера", () => {
+    const w = MTT_BBDEF_PRESETS.map((p) => pct(p, "call"));
+    expect(w[0]).toBeLessThan(w[1]);
+    expect(w[1]).toBeLessThan(w[2]);
+    // 3бет при этом одинаковый на всех трёх чартах — так в оригинале.
+    const three = MTT_BBDEF_PRESETS.map((p) => pct(p, "raise"));
+    expect(new Set(three.map((x) => x.toFixed(2))).size).toBe(1);
+  });
+
+  it("MTT-опены шире кэшевых на тех же местах — анте и мелкий сайзинг", () => {
+    expect(pct(byId("mtt-rfi-mp"))).toBeGreaterThan(pct(byId("rfi-mp")));
+    expect(pct(byId("mtt-rfi-co"))).toBeGreaterThan(pct(byId("rfi-co")));
+    expect(pct(byId("mtt-rfi-bu"))).toBeGreaterThan(pct(byId("rfi-bu")));
   });
 });
 
