@@ -22,6 +22,7 @@ import {
   presetForPath,
   presetWidthPct,
   BLINDS4BET_PRESETS,
+  MTT_STACKS,
 } from ".";
 import {
   QUIZ_SPOTS,
@@ -245,7 +246,13 @@ describe("тренажёр", () => {
   });
 });
 
-describe.each(FORMATS)("ветка событий — $label", ({ tree, key: formatKey }) => {
+// Каждый конфиг формата — своё дерево: у кэша он один (100bb), у MTT их
+// пять по глубине стека, и на коротких стеках дерево совсем другое.
+const TREE_CASES = FORMATS.flatMap((f) =>
+  f.configs.map((c) => ({ name: `${f.label} · ${c.label}`, key: `${f.key}/${c.key}`, tree: c.tree })),
+);
+
+describe.each(TREE_CASES)("ветка событий — $name", ({ tree, key: formatKey }) => {
   /** Все опции дерева вместе с путём до них. */
   function walk(node: TreeNode, path: string[] = []): { path: string[]; option: TreeOption }[] {
     return node.options.flatMap((o) => {
@@ -256,12 +263,7 @@ describe.each(FORMATS)("ветка событий — $label", ({ tree, key: for
 
   const all = walk(tree);
 
-  // MTT-чарты пока заглушка (mtt/rfi.ts пустой), поэтому и дерево MTT пустое.
-  // Тесты под него написаны заранее и включатся сами, как только
-  // tools/gen_mtt_rfi.py заполнит пресеты, — снимать skip руками не нужно.
-  const pending = all.length === 0;
-
-  it.skipIf(pending)("непустое дерево", () => {
+  it("непустое дерево", () => {
     expect(all.length, formatKey).toBeGreaterThan(0);
   });
 
@@ -288,7 +290,7 @@ describe.each(FORMATS)("ветка событий — $label", ({ tree, key: for
     check(tree);
   });
 
-  it.skipIf(pending)("путь до листа выбирает непустой диапазон", () => {
+  it("путь до листа выбирает непустой диапазон", () => {
     const leaves = all.filter(({ option }) => !option.next);
     expect(leaves.length).toBeGreaterThan(0);
     for (const { path } of leaves) {
@@ -499,6 +501,32 @@ describe("MTT — FF START", () => {
     // 3бет при этом одинаковый на всех трёх чартах — так в оригинале.
     const three = MTT_BBDEF_PRESETS.map((p) => pct(p, "raise"));
     expect(new Set(three.map((x) => x.toFixed(2))).size).toBe(1);
+  });
+
+  it("каждый MTT-чарт достижим хотя бы на одной глубине стека", () => {
+    // Дерево сознательно не показывает линии, под которые на этой глубине
+    // нет чарта (на 16-22bb нет опена, на 25-40bb — игры против опена).
+    // Обратная опасность — чарт, до которого не ведёт ни один путь: именно
+    // так он и выпал бы из приложения незаметно.
+    const reachable = new Set<string>();
+    const walk = (n: TreeNode) => {
+      for (const o of n.options) {
+        if (o.presetId) reachable.add(o.presetId);
+        if (o.next) walk(o.next);
+      }
+    };
+    for (const s of MTT_STACKS) walk(s.tree);
+    for (const p of MTT_PRESETS) {
+      expect(reachable.has(p.id), `${p.id} недостижим ни на одной глубине`).toBe(true);
+    }
+  });
+
+  it("на коротких стеках дерево одноходовое — других решений там нет", () => {
+    for (const key of ["s09", "s1014", "s1622"]) {
+      const s = MTT_STACKS.find((x) => x.key === key)!;
+      // Один шаг: сразу позиция, без «что было до вас».
+      expect(s.tree.options.every((o) => o.presetId && !o.next), key).toBe(true);
+    }
   });
 
   it("MTT-опены шире кэшевых на тех же местах — анте и мелкий сайзинг", () => {

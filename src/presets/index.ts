@@ -3,7 +3,7 @@
 
 import { RangePreset, PresetGroup } from "./types";
 import { TreeNode, ACTION_TREE } from "./tree";
-import { MTT_TREE } from "./mtt/tree";
+import { MTT_STACKS } from "./mtt/tree";
 import { MTT_RFI_PRESETS } from "./mtt/rfi";
 import { MTT_ISO_PRESETS } from "./mtt/iso";
 import { MTT_VS_RFI_PRESETS } from "./mtt/vsRfi";
@@ -52,7 +52,11 @@ export { ALL_PRESETS, presetById } from "./all";
 
 export type { TreeNode, TreeOption, Seat } from "./tree";
 export { ACTION_TREE, resolvePath, presetForPath, presetWidthPct } from "./tree";
-export { MTT_TREE } from "./mtt/tree";
+export type { StackConfig } from "./mtt/tree";
+// Именно `export ... from`, а не `export { MTT_STACKS }` по импортированному
+// имени выше: tsc и vitest такое проглатывают, а Vite отдаёт модуль, в котором
+// имя не определено, и приложение падает на загрузке.
+export { MTT_STACKS } from "./mtt/tree";
 
 /**
  * Формат игры. Кэш и MTT — это разные столы (6-max против 8-max) и разные
@@ -60,9 +64,44 @@ export { MTT_TREE } from "./mtt/tree";
  */
 export type FormatKey = "cash" | "mtt";
 
-export const FORMATS: { key: FormatKey; label: string; note: string; tree: TreeNode }[] = [
-  { key: "cash", label: "Кэш", note: "6-max · Green Charts", tree: ACTION_TREE },
-  { key: "mtt", label: "MTT", note: "FF START · по глубине стека", tree: MTT_TREE },
+/**
+ * Конфигурация внутри формата — то, что в GTO Wizard выбирается до дерева.
+ * У кэша она одна (100bb), у MTT это глубина стека, и от неё зависит само
+ * дерево: на 9bb решений кроме пуша нет, а против опена коллировать начинают
+ * только с 40bb.
+ */
+export interface FormatConfig {
+  key: string;
+  label: string;
+  note: string;
+  tree: TreeNode;
+}
+
+export interface Format {
+  key: FormatKey;
+  label: string;
+  note: string;
+  /** Подпись селектора конфигов. Пусто — селектор не показывается. */
+  configLabel?: string;
+  configs: FormatConfig[];
+}
+
+export const FORMATS: Format[] = [
+  {
+    key: "cash",
+    label: "Кэш",
+    note: "6-max · Green Charts",
+    configs: [
+      { key: "100bb", label: "100bb", note: "6-max · Green Charts", tree: ACTION_TREE },
+    ],
+  },
+  {
+    key: "mtt",
+    label: "MTT",
+    note: "FF START · по глубине стека",
+    configLabel: "Стек",
+    configs: MTT_STACKS,
+  },
 ];
 
 /** Пресеты, сгруппированные по типу чарта. */

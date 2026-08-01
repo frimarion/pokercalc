@@ -1,14 +1,16 @@
-// Ветка событий MTT (FF START).
+// Ветки событий MTT (FF START) — своя на каждую глубину стека.
 //
-// В отличие от кэша, в MTT глубина стека — часть спота, а не фон: на 25bb+
-// открываем рейзом 2bb, на 10-14bb уже только пуш-фолд, против опена на 40bb+
-// коллируем и 3бетим, а на 16-22bb ставим олл-ин. Поэтому после «что было до
-// вас» идёт шаг выбора стека, и только потом позиция. Без него чарты
-// противоречили бы друг другу: и опен 2bb, и опен-пуш — это «все сфолдили».
+// В турнире стек решает всё: на 9bb единственное решение — пушить или нет,
+// на 20bb против опена ты не коллируешь, а ставишь олл-ин, и только с 40bb
+// начинается привычная игра с постфлопом. Поэтому глубина вынесена НАВЕРХ,
+// в конфиг (как в GTO Wizard), а не спрятана шагом посреди дерева: сначала
+// выбираешь стек, дальше видишь только те линии, которые на нём существуют.
 //
-// Чарты, заданные группой позиций («ранние», «поздние»), так группой и
-// остаются: оригинал не делит их по конкретному месту, и раскладывать их по
-// местам самим — выдумывать данные.
+// Из этого следует и главное правило этого файла: **дерево не показывает
+// линию, под которую в паке нет чарта**. На 16-22bb пак не даёт опена, на
+// 25-40bb — игры против опена. Подставить туда соседнюю глубину было бы
+// незаметным враньём, поэтому вместо этого в note честно написано, чего
+// на этом стеке нет.
 
 import { TreeNode, TreeOption } from "../tree";
 import { RangePreset } from "../types";
@@ -48,7 +50,9 @@ function options(presets: RangePreset[]): TreeOption[] {
   return presets.map((p): TreeOption => ({
     // Ключ — хвост id после префикса группы: он уникален внутри шага.
     key: p.id.replace(/^mtt-[a-z0-9]+-/, ""),
-    label: p.position,
+    // У пуш-фолда position — «EP · 10-14bb»: стек внутри подписи нужен в
+    // общем списке чартов, но в дереве он уже выбран конфигом выше.
+    label: p.position.split(" · ")[0],
     presetId: p.id,
     next: lineNode(p),
   }));
@@ -57,35 +61,21 @@ function options(presets: RangePreset[]): TreeOption[] {
 const pushAt = (stack: string) =>
   MTT_PUSH_PRESETS.filter((p) => p.subtitle.includes(`стек ${stack}`));
 
-/** Все сфолдили — открываем сами. Чем именно, решает стек. */
+/** Дерево коротких стеков: единственное решение — пушить или фолдить. */
+function pushTree(stack: string): TreeNode {
+  return {
+    title: "Ваша позиция",
+    note: "все до вас сфолдили · только олл-ин или фолд",
+    showFold: true,
+    options: options(pushAt(stack)),
+  };
+}
+
 const OPEN_NODE: TreeNode = {
-  title: "Глубина стека",
-  note: "от неё зависит, открываем рейзом или пушим",
-  options: [
-    {
-      key: "deep",
-      label: "25bb+",
-      note: "опен 2bb",
-      next: {
-        title: "Ваша позиция",
-        note: "чем позже, тем шире открываем",
-        showFold: true,
-        options: options(MTT_RFI_PRESETS),
-      },
-    },
-    {
-      key: "s1014",
-      label: "10-14bb",
-      note: "только пуш или фолд",
-      next: { title: "Ваша позиция", showFold: true, options: options(pushAt("10-14bb")) },
-    },
-    {
-      key: "s09",
-      label: "0-9bb",
-      note: "только пуш или фолд",
-      next: { title: "Ваша позиция", showFold: true, options: options(pushAt("0-9bb")) },
-    },
-  ],
+  title: "Ваша позиция",
+  note: "чем позже, тем шире открываем",
+  showFold: true,
+  options: options(MTT_RFI_PRESETS),
 };
 
 /** До нас лимп. BB здесь тоже есть: отказ от изолейта у него — чек, а не фолд. */
@@ -96,60 +86,97 @@ const LIMP_NODE: TreeNode = {
   options: options(MTT_ISO_PRESETS),
 };
 
-/** До нас опен 2bb. На 40bb+ играем постфлоп, на 16-22bb — рестил-пуш. */
+/** До нас опен 2bb, стек 40bb+: играем 3бет или колд-колл. */
 const VS_OPEN_NODE: TreeNode = {
-  title: "Глубина стека",
+  title: "Где вы сидите",
+  showFold: true,
   options: [
+    ...options(MTT_VS_RFI_PRESETS),
     {
-      key: "deep",
-      label: "40bb+",
-      note: "3бет или колд-колл",
+      key: "bb",
+      label: "BB",
+      note: "защита блайнда",
       next: {
-        title: "Где вы сидите",
+        title: "Кто открыл",
         showFold: true,
-        options: [
-          ...options(MTT_VS_RFI_PRESETS),
-          {
-            key: "bb",
-            label: "BB",
-            note: "защита блайнда",
-            next: {
-              title: "Кто открыл",
-              showFold: true,
-              options: options(MTT_BBDEF_PRESETS),
-            },
-          },
-        ],
-      },
-    },
-    {
-      key: "short",
-      label: "16-22bb",
-      note: "3бет-пуш (рестил)",
-      next: {
-        title: "Кто открыл и где вы",
-        showFold: true,
-        options: options(MTT_3BETPUSH_PRESETS),
+        options: options(MTT_BBDEF_PRESETS),
       },
     },
   ],
 };
 
-/** Мы открыли, нас 3бетнули. */
+/** Мы открыли, нас 3бетнули (5-7bb). */
 const DEF_3BET_NODE: TreeNode = {
   title: "С какой позиции вы открылись",
-  note: "стек 40bb+, 3бет соперника 5-7bb",
+  note: "3бет соперника 5-7bb",
   showFold: true,
   options: options(MTT_DEF3BET_PRESETS),
 };
 
-export const MTT_TREE: TreeNode = {
-  title: "Что было до вас",
-  note: "FF START · MTT",
-  options: [
-    { key: "open", label: "Все сфолдили", note: "открываем первыми", next: OPEN_NODE },
-    { key: "limp", label: "Есть лимперы", note: "изолейт", next: LIMP_NODE },
-    { key: "vsopen", label: "Открыли рейзом 2bb", note: "3бет, колл или пуш", next: VS_OPEN_NODE },
-    { key: "def3bet", label: "Вы открыли, вас 3бетнули", next: DEF_3BET_NODE },
-  ],
-};
+export interface StackConfig {
+  key: string;
+  /** Подпись кнопки конфига — глубина стека. */
+  label: string;
+  /** Что на этой глубине есть, а чего пак не покрывает. */
+  note: string;
+  tree: TreeNode;
+}
+
+// От глубокого к короткому: первый конфиг — дефолтный, а полное дерево
+// полезнее как точка входа, чем чарт пуш-фолда на девяти блайндах.
+export const MTT_STACKS: StackConfig[] = [
+  {
+    key: "s40",
+    label: "40bb+",
+    note: "полное дерево: опен, изолейт, игра против опена и защита от 3бета",
+    tree: {
+      title: "Что было до вас",
+      options: [
+        { key: "open", label: "Все сфолдили", note: "открываем первыми", next: OPEN_NODE },
+        { key: "limp", label: "Есть лимперы", note: "изолейт", next: LIMP_NODE },
+        {
+          key: "vsopen",
+          label: "Открыли рейзом 2bb",
+          note: "3бет или колд-колл",
+          next: VS_OPEN_NODE,
+        },
+        { key: "def3bet", label: "Вы открыли, вас 3бетнули", next: DEF_3BET_NODE },
+      ],
+    },
+  },
+  {
+    key: "s2540",
+    label: "25-40bb",
+    note: "опен 2bb и изолейт · игра против опена начинается с 40bb",
+    tree: {
+      title: "Что было до вас",
+      options: [
+        { key: "open", label: "Все сфолдили", note: "открываем первыми", next: OPEN_NODE },
+        { key: "limp", label: "Есть лимперы", note: "изолейт", next: LIMP_NODE },
+      ],
+    },
+  },
+  {
+    key: "s1622",
+    label: "16-22bb",
+    note: "рестил-пуш против опена · своего опена на этом стеке в паке нет",
+    tree: {
+      title: "Кто открыл и где вы",
+      note: "соперник открыл 2bb, вы отвечаете олл-ином",
+      showFold: true,
+      options: options(MTT_3BETPUSH_PRESETS),
+    },
+  },
+  {
+    key: "s1014",
+    label: "10-14bb",
+    note: "только опен-пуш · игры против опена пак не покрывает",
+    tree: pushTree("10-14bb"),
+  },
+  {
+    key: "s09",
+    label: "0-9bb",
+    note: "только опен-пуш · игры против опена пак не покрывает",
+    tree: pushTree("0-9bb"),
+  },
+];

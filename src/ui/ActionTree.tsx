@@ -14,17 +14,21 @@ import { useStore } from "../state/store";
  * в GTO Wizard: кто открыл → кто и как ответил → как опенер ответил
  * на 3бет. Каждый шаг применяет свой чарт.
  *
- * У кэша (6-max, Green Charts) и MTT (8-max, солвер) свои деревья —
- * переключатель формата выбирает корень.
+ * Над деревом — формат и его конфигурация, тоже как в GTO Wizard. У кэша
+ * конфиг один (100bb) и селектор скрыт; у MTT это глубина стека, и она
+ * задаёт само дерево: на коротком стеке линий кроме пуша попросту нет.
  */
 export function ActionTree() {
   const applyPreset = useStore((s) => s.applyPreset);
   const activeSide = useStore((s) => s.activeSide);
   const [format, setFormat] = useState<FormatKey>("cash");
+  const [configKey, setConfigKey] = useState<string>(FORMATS[0].configs[0].key);
   const [path, setPath] = useState<string[]>([]);
   const [withSituational, setWithSituational] = useState(true);
 
-  const root = FORMATS.find((f) => f.key === format)!.tree;
+  const fmt = FORMATS.find((f) => f.key === format)!;
+  const config = fmt.configs.find((c) => c.key === configKey) ?? fmt.configs[0];
+  const root = config.tree;
   const chain = resolvePath(path, root);
   const { presetId, actionKind } = presetForPath(path, root);
   const preset = presetId ? presetById(presetId) : undefined;
@@ -54,6 +58,7 @@ export function ActionTree() {
               title={f.note}
               onClick={() => {
                 setFormat(f.key);
+                setConfigKey(f.configs[0].key);
                 setPath([]); // деревья разные — путь кэша в MTT не имеет смысла
               }}
               className={`rounded px-2 py-0.5 text-[10px] font-semibold transition ${
@@ -90,6 +95,33 @@ export function ActionTree() {
           → в {activeSide === "hero" ? "Hero" : "Villain"}
         </span>
       </div>
+
+      {/* Конфигурация формата. У кэша она одна, поэтому строки просто нет. */}
+      {fmt.configs.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] uppercase tracking-wider text-neutral-500">
+            {fmt.configLabel}
+          </span>
+          {fmt.configs.map((c) => (
+            <button
+              key={c.key}
+              title={c.note}
+              onClick={() => {
+                setConfigKey(c.key);
+                setPath([]); // на другой глубине дерево другое
+              }}
+              className={`rounded-md px-2 py-1 text-[11px] font-bold transition ${
+                c.key === config.key
+                  ? "bg-emerald-500 text-black"
+                  : "border border-white/10 text-neutral-400 hover:bg-white/5"
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
+          <span className="w-full text-[9px] leading-tight text-neutral-600">{config.note}</span>
+        </div>
+      )}
 
       <div className="flex items-start gap-1.5 overflow-x-auto pb-1">
         {chain.map(({ node, chosen }, depth) => (
@@ -155,7 +187,9 @@ export function ActionTree() {
             </span>
           </>
         ) : (
-          "Выберите, кто открывает"
+          // Шаг называется по-разному («кто открыл», «ваша позиция»),
+          // поэтому подсказка нейтральная.
+          "Пройдите ветку до конца, чтобы применить чарт"
         )}
       </div>
     </div>
