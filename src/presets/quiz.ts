@@ -164,7 +164,13 @@ export function actionEdges(p: RangePreset, hand: string): ActionEdge[] {
   return out;
 }
 
-export type QuizAnswer = ActionKind | "fold";
+/**
+ * `smallraise` — ответ, которого в чарте нет: рейз обычным сайзингом там, где
+ * пак играет только пуш-фолд. Вес у него всегда 0, то есть он всегда неверен,
+ * и нужен именно поэтому: без него пуш-спот вырождается в выбор из двух
+ * кнопок, где «олл-ин» угадывается и на руках, которых в чарте нет.
+ */
+export type QuizAnswer = ActionKind | "fold" | "smallraise";
 
 export interface QuizSpot {
   presetId: string;
@@ -285,6 +291,18 @@ export function declinesByCheck(p: RangePreset): boolean {
   return (p.group === "ISO" || p.group === "MTTISO") && p.position === "BB";
 }
 
+/**
+ * Рейз обычным сайзингом на пуш-фолд-стеке — заведомо неверный ответ. На 0-14bb
+ * (и на рестиле 16-22bb) пак FF START рейзов не знает вовсе: либо олл-ин, либо
+ * фолд. Кнопка нужна, чтобы спот не сводился к выбору из двух, где «олл-ин»
+ * угадывается даже с рукой, которой в чарте нет.
+ */
+function decoyRaiseLabel(p: RangePreset): string | null {
+  if (p.group === "MTTPUSH") return "Рейз 2bb";
+  if (p.group === "MTT3BETPUSH") return "3бет 5bb";
+  return null;
+}
+
 /** Все споты, по которым можно спрашивать. */
 export const QUIZ_SPOTS: QuizSpot[] = ALL_PRESETS.map((p) => {
   const answers: { key: QuizAnswer; label: string }[] = [
@@ -294,6 +312,9 @@ export const QUIZ_SPOTS: QuizSpot[] = ALL_PRESETS.map((p) => {
   // Пассивная линия называется по-разному: на MTT-SB это лимп, на изолэйте
   // с SB — доставка блайнда. Подпись берём из чарта, где она уже задана.
   if (call) answers.push({ key: "call", label: callLabel(p) });
+  // Ответы идут по нарастанию агрессии, поэтому неполный рейз — перед пушем.
+  const decoy = decoyRaiseLabel(p);
+  if (decoy) answers.push({ key: "smallraise", label: decoy });
   if (p.actions.some((a) => a.kind === "raise")) {
     answers.push({ key: "raise", label: raiseLabel(p) });
   }
@@ -315,7 +336,8 @@ export interface Question {
 
 export function questionWeights(p: RangePreset, hand: string): Record<QuizAnswer, number> {
   const w = handWeights(p, hand);
-  return { raise: w.raise, call: w.call, fold: foldWeight(w) };
+  // smallraise — приманка, её в чартах нет: этой линией рука не играется никогда.
+  return { raise: w.raise, call: w.call, fold: foldWeight(w), smallraise: 0 };
 }
 
 /** Ответ верен, если чарт играет руку так хоть какую-то долю времени. */

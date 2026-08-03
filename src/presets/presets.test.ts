@@ -194,6 +194,30 @@ describe("тренажёр", () => {
     }
   });
 
+  it("на пуш-фолде есть рейз обычным сайзингом — и он всегда неверен", () => {
+    // Иначе спот сводится к двум кнопкам и «олл-ин» угадывается даже с рукой,
+    // которой в чарте нет.
+    const push = QUIZ_SPOTS.filter((s) =>
+      ["MTTPUSH", "MTT3BETPUSH"].includes(presetById(s.presetId)!.group),
+    );
+    expect(push.length).toBeGreaterThan(0);
+    for (const s of push) {
+      const p = presetById(s.presetId)!;
+      expect(s.answers.map((a) => a.key), s.presetId).toContain("smallraise");
+      // Стоит перед пушем: ответы идут по нарастанию агрессии.
+      expect(s.answers.map((a) => a.key).indexOf("smallraise")).toBeLessThan(
+        s.answers.map((a) => a.key).indexOf("raise"),
+      );
+      for (const hand of s.hands) {
+        expect(questionWeights(p, hand).smallraise, `${s.presetId} ${hand}`).toBe(0);
+      }
+    }
+    // В остальных спотах приманки нет: там рейз нормального размера и есть чарт.
+    for (const s of QUIZ_SPOTS.filter((x) => !push.includes(x))) {
+      expect(s.answers.map((a) => a.key), s.presetId).not.toContain("smallraise");
+    }
+  });
+
   it("описание спота без служебных обрывков из position", () => {
     for (const s of QUIZ_SPOTS) {
       // «OOP vs 3bet 18% (SB vs BB)» не должно утекать в текст вопроса
@@ -705,6 +729,68 @@ describe("стол тренажёра", () => {
       expect(limps.length, `${p.id}: лимпа нет`).toBeGreaterThan(0);
       for (const l of limps) expect(l.seat, `${p.id}: лимпит сам герой`).not.toBe(scene.heroId);
     }
+  });
+
+  it("у каждого места есть позиция, и они не повторяются", () => {
+    // Стол полный, порядок посадки известен — значит «?» на столе быть не
+    // может: позиция выводится из посадки, даже когда чарт её не называет.
+    const CASH = ["UTG", "MP", "CO", "BU", "SB", "BB"];
+    const MTT = ["EP+1", "EP+2", "MP", "HJ", "CO", "BU", "SB", "BB"];
+    for (const [id, scene] of SCENES) {
+      const order = scene.seats.length > 6 ? MTT : CASH;
+      expect(scene.seats.map((s) => s.pos), id).toEqual(order);
+    }
+  });
+
+  it("блайнды выставлены в каждом споте", () => {
+    // Их ставят правила стола, а не чарт: спот без блайндов — потерянные фишки
+    // в банке и стеках. Один раз они уже пропали в MTT-защите от 3бета.
+    for (const [id, scene] of SCENES) {
+      const blinds = scene.steps.filter((s) => s.kind === "blind");
+      expect(blinds.map((b) => b.amount), id).toEqual([0.5, 1]);
+      const bySeat = new Map(scene.seats.map((s) => [s.id, s.pos]));
+      expect(blinds.map((b) => bySeat.get(b.seat)), id).toEqual(["SB", "BB"]);
+    }
+  });
+
+  it("баттон стоит у места на BU", () => {
+    for (const [id, scene] of SCENES) {
+      const bu = scene.seats.find((s) => s.pos === "BU")!;
+      expect(scene.buttonId, id).toBe(bu.id);
+    }
+  });
+
+  it("герой сидит внутри группы, которой его назвал чарт", () => {
+    // Иначе выведенная позиция спорила бы с подписью: «Ранние», а сидит на HJ.
+    const EARLY = ["EP+1", "EP+2"];
+    const LATE = ["HJ", "CO", "BU"];
+    const expected: Record<string, string[]> = {
+      ранн: EARLY,
+      средн: ["MP", "HJ"],
+      поздн: LATE,
+      блайнд: ["SB", "BB"],
+    };
+    for (const p of ALL_PRESETS.filter((x) => /^(ранн|средн|поздн|блайнд)/i.test(x.position))) {
+      const scene = sceneFor(p);
+      const hero = scene.seats.find((s) => s.hero)!;
+      const key = Object.keys(expected).find((k) => p.position.toLowerCase().startsWith(k))!;
+      expect(expected[key], `${p.id}: герой на ${hero.pos}`).toContain(hero.pos);
+    }
+  });
+
+  it("у всех за столом одинаковый стек, и он соответствует глубине спота", () => {
+    for (const [id, scene] of SCENES) {
+      expect(scene.startStack, id).toBeGreaterThan(0);
+      for (const s of scene.seats) expect(s.stack, id).toBe(scene.startStack);
+      // Ставить больше, чем есть за местом, спот не может.
+      const max = Math.max(...scene.steps.map((s) => s.amount ?? 0));
+      expect(max, `${id}: ставка ${max} при стеке ${scene.startStack}`).toBeLessThanOrEqual(
+        scene.startStack,
+      );
+    }
+    // Кэш — 100bb, MTT — из подписи глубины: «10-14bb» → середина.
+    expect(sceneFor(presetById("rfi-utg")!).startStack).toBe(100);
+    expect(sceneFor(presetById("mtt-rfi-co")!).startStack).toBe(25);
   });
 
   it("места, заданные процентом или группой, помечены как неточные", () => {

@@ -48,6 +48,8 @@ function sceneKindOf(preset: RangePreset, answer: QuizAnswer): SceneActionKind {
   // На BB в лимпед-поте отказ — это чек, а не фолд: карты мы не сдаём.
   if (answer === "fold") return declinesByCheck(preset) ? "check" : "fold";
   if (answer === "call") return group === "ISO" || group === "MTTISO" ? "limp" : "call";
+  // Приманка на пуш-фолде: рейз не в олл-ин. За столом это обычный рейз/3бет.
+  if (answer === "smallraise") return group === "MTT3BETPUSH" ? "3bet" : "raise";
   switch (group) {
     case "MTTPUSH":
     case "MTT3BETPUSH":

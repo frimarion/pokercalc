@@ -42,6 +42,11 @@ function seatPos(index: number, heroIndex: number, n: number): { left: string; t
   };
 }
 
+/** 97.5 → «97.5», 100 → «100»: копейки в стеке только мешают читать. */
+function fmtBb(v: number): string {
+  return String(Math.round(v * 10) / 10);
+}
+
 function Chips({ amount, tone }: { amount: number; tone: string }) {
   return (
     <div className="pc-pop flex items-center gap-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-bold shadow">
@@ -59,6 +64,15 @@ function MiniCard({ rank, suit }: { rank: string; suit: SuitIndex }) {
         {SUIT_SYMBOLS[suit]}
       </span>
     </div>
+  );
+}
+
+/** Баттон — деревянная фишка дилера у места. */
+function DealerButton() {
+  return (
+    <span className="absolute -right-2 -top-2 z-10 flex h-4 w-4 items-center justify-center rounded-full border border-black/50 bg-neutral-100 text-[9px] font-black leading-none text-black shadow">
+      D
+    </span>
   );
 }
 
@@ -167,8 +181,9 @@ export function PokerTable({
       <div className="absolute inset-[8%] rounded-[50%] border-4 border-[#0d1a15] bg-[radial-gradient(ellipse_at_center,#17352b_0%,#0f231d_70%,#0b1a15_100%)] shadow-[inset_0_0_60px_rgba(0,0,0,0.6)]" />
 
       {/* Банк */}
-      {/* Банк выше центра: внизу к нему подступает облако действия героя. */}
-      <div className="absolute left-1/2 top-[36%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1">
+      {/* Чуть выше центра: снизу подступает облако действия героя, сверху —
+          фишки верхнего места, и на 36% банк уже налезал на них. */}
+      <div className="absolute left-1/2 top-[45%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1">
         {pot > 0 && (
           <>
             <div className="flex gap-0.5">
@@ -228,7 +243,7 @@ export function PokerTable({
 
             {/* Само место */}
             <div
-              className={`flex flex-col items-center gap-1 rounded-xl border px-2.5 py-1.5 transition-all duration-300 ${
+              className={`relative flex flex-col items-center gap-1 rounded-xl border px-2.5 py-1.5 transition-all duration-300 ${
                 isHero
                   ? "border-emerald-400/70 bg-[#10201a] shadow-[0_0_18px_rgba(52,199,123,0.25)]"
                   : "border-white/10 bg-[#0e1512]"
@@ -236,12 +251,19 @@ export function PokerTable({
                 isHero && !action && done ? "pc-turn" : ""
               }`}
             >
+              {s.id === scene.buttonId && <DealerButton />}
+              {/* Позиция и стек одной строкой, как в покерных клиентах: место
+                  и так выше остальных из-за карт, лишний ряд ему ни к чему. */}
               <span
-                className={`text-[11px] font-bold ${
+                className={`flex items-baseline gap-1 text-[11px] font-bold ${
                   isHero ? "text-emerald-300" : s.exact ? "text-neutral-300" : "text-neutral-500"
                 }`}
               >
-                {s.label}
+                {s.pos}
+                {isHero && " (вы)"}
+                <span className="text-[9px] font-semibold text-amber-200/60">
+                  {fmtBb(s.stack - (bet ?? 0))}bb
+                </span>
               </span>
               {isHero ? (
                 <div className="flex gap-1">
@@ -253,6 +275,13 @@ export function PokerTable({
                 <div className="h-6 text-[10px] leading-6 text-neutral-600">—</div>
               ) : (
                 <CardBacks />
+              )}
+              {/* Чего чарт про это место НЕ говорит — приглушённой строкой:
+                  позиция выведена из посадки, а подпись чарта вот эта. */}
+              {s.note && (
+                <span className="max-w-[76px] truncate text-[9px] leading-none text-neutral-500">
+                  {s.note}
+                </span>
               )}
             </div>
 
