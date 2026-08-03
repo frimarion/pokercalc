@@ -36,7 +36,9 @@ function seatPos(index: number, heroIndex: number, n: number): { left: string; t
   const angle = (Math.PI / 2) + (rel * 2 * Math.PI) / n;
   return {
     left: `${50 + 41 * Math.cos(angle)}%`,
-    top: `${50 + 39 * Math.sin(angle)}%`,
+    // По вертикали радиус меньше: место героя внизу — самое высокое (карты
+    // крупнее рубашек), и на 39% его фишки уже вылезали за пределы стола.
+    top: `${50 + 34 * Math.sin(angle)}%`,
   };
 }
 
@@ -165,7 +167,8 @@ export function PokerTable({
       <div className="absolute inset-[8%] rounded-[50%] border-4 border-[#0d1a15] bg-[radial-gradient(ellipse_at_center,#17352b_0%,#0f231d_70%,#0b1a15_100%)] shadow-[inset_0_0_60px_rgba(0,0,0,0.6)]" />
 
       {/* Банк */}
-      <div className="absolute left-1/2 top-[42%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1">
+      {/* Банк выше центра: внизу к нему подступает облако действия героя. */}
+      <div className="absolute left-1/2 top-[36%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1">
         {pot > 0 && (
           <>
             <div className="flex gap-0.5">
@@ -207,8 +210,10 @@ export function PokerTable({
         return (
           <div
             key={s.id}
-            className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1"
-            style={pos}
+            className="absolute flex flex-col items-center gap-1"
+            // Место героя выше остальных (карты крупнее рубашек) и стоит у
+            // нижнего края — центрируй его как все, и фишки уедут под стол.
+            style={{ ...pos, transform: `translate(-50%, ${isHero ? "-72%" : "-50%"})` }}
           >
             {/* Облако действия — над местом */}
             <div className="h-5">

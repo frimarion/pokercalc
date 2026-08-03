@@ -32,6 +32,7 @@ import {
   handWeights,
   handFamily,
   TRAINER_SECTIONS,
+  declinesByCheck,
 } from "./quiz";
 import { Scene, potAfter, sceneFor } from "./scene";
 
@@ -609,6 +610,29 @@ describe("Blinds Defense vs 4bet (стр. 8)", () => {
         const w = handWeights(p, cell.label);
         expect(w.raise + w.call, `${p.id}: ${cell.label}`).toBeLessThanOrEqual(1.0001);
       }
+    }
+  });
+});
+
+describe("отказ сыграть руку", () => {
+  it("на BB в лимпед-поте это чек, а не фолд", () => {
+    // Фолда у BB против лимпа нет: блайнд уже поставлен, отказаться от
+    // изолэйта можно только чеком. Тренажёр предлагал невозможный ответ.
+    const checkSpots = ALL_PRESETS.filter(declinesByCheck);
+    expect(checkSpots.length, "спотов с чеком нет — тест ничего не проверяет")
+      .toBeGreaterThan(0);
+    for (const p of checkSpots) {
+      const spot = QUIZ_SPOTS.find((s) => s.presetId === p.id);
+      if (!spot) continue; // чарт мог не дать ни одной интересной руки
+      expect(spot.answers.find((a) => a.key === "fold")?.label, p.id).toBe("Чек");
+    }
+  });
+
+  it("там, где фолд возможен, он остаётся фолдом", () => {
+    for (const spot of QUIZ_SPOTS) {
+      const p = presetById(spot.presetId)!;
+      if (declinesByCheck(p)) continue;
+      expect(spot.answers.find((a) => a.key === "fold")?.label, p.id).toBe("Фолд");
     }
   });
 });

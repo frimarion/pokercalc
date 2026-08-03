@@ -272,9 +272,24 @@ function callLabel(p: RangePreset): string {
   return "Колл";
 }
 
+/**
+ * Отказаться сыграть руку не везде значит сфолдить: в лимпед-поте у BB фолда
+ * нет вообще — он уже поставил блайнд, и не изолировать можно только чеком.
+ * Та же поправка стоит в разборе истории рук (`checkDeclines` в
+ * `hh/deviations.ts`), а в тренажёре её не было: спрашивая «фолд?» на BB
+ * против лимпа, тренажёр предлагал невозможное действие.
+ *
+ * На «vs 2+» позиция героя не задана — там фолд возможен и остаётся фолдом.
+ */
+export function declinesByCheck(p: RangePreset): boolean {
+  return (p.group === "ISO" || p.group === "MTTISO") && p.position === "BB";
+}
+
 /** Все споты, по которым можно спрашивать. */
 export const QUIZ_SPOTS: QuizSpot[] = ALL_PRESETS.map((p) => {
-  const answers: { key: QuizAnswer; label: string }[] = [{ key: "fold", label: "Фолд" }];
+  const answers: { key: QuizAnswer; label: string }[] = [
+    { key: "fold", label: declinesByCheck(p) ? "Чек" : "Фолд" },
+  ];
   const call = p.actions.find((a) => a.kind === "call");
   // Пассивная линия называется по-разному: на MTT-SB это лимп, на изолэйте
   // с SB — доставка блайнда. Подпись берём из чарта, где она уже задана.

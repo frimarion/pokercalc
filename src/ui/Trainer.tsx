@@ -10,8 +10,9 @@ import {
   TRAINER_SECTIONS,
   TrainerSection,
   sectionGroupLabel,
+  declinesByCheck,
 } from "../presets/quiz";
-import { PresetGroup, presetById } from "../presets";
+import { PresetGroup, RangePreset, presetById } from "../presets";
 import { SceneActionKind, sceneFor } from "../presets/scene";
 import { HeroAction, PokerTable } from "./PokerTable";
 import { SuitIndex } from "../engine/cards";
@@ -42,8 +43,10 @@ function dealHand(label: string): { rank: string; suit: SuitIndex }[] {
  * RFI, 4бет в защите от 3бета и олл-ин на коротком стеке: облако над местом
  * должно называться и краситься так же, как чужие действия.
  */
-function sceneKindOf(group: PresetGroup, answer: QuizAnswer): SceneActionKind {
-  if (answer === "fold") return "fold";
+function sceneKindOf(preset: RangePreset, answer: QuizAnswer): SceneActionKind {
+  const group = preset.group;
+  // На BB в лимпед-поте отказ — это чек, а не фолд: карты мы не сдаём.
+  if (answer === "fold") return declinesByCheck(preset) ? "check" : "fold";
   if (answer === "call") return group === "ISO" || group === "MTTISO" ? "limp" : "call";
   switch (group) {
     case "MTTPUSH":
@@ -145,7 +148,7 @@ export function Trainer() {
     question && answered
       ? {
           label: question.spot.answers.find((a) => a.key === answered)?.label ?? answered,
-          kind: sceneKindOf(question.preset.group, answered),
+          kind: sceneKindOf(question.preset, answered),
           correct: wasRight,
         }
       : null;
