@@ -76,6 +76,21 @@ function cashOpenSize(seat: string): number {
 }
 
 /**
+ * 3бет считается от опена и зависит от позиции 3бетора: вне позиции ×4, в
+ * позиции ×3 — вне позиции приходится брать банк дороже. Позиция здесь та же,
+ * что и в названии чарта: «защита от 3бета в позиции» значит, что 3бетнул тот,
+ * кто сидит вне позиции.
+ */
+function threeBetSize(open: number, inPosition: boolean): number {
+  return open * (inPosition ? 3 : 4);
+}
+
+/** 4бет опенера — примерно 2.4 от 3бета, до половины блайнда. */
+function fourBetSize(threeBet: number): number {
+  return Math.round(threeBet * 2.4 * 2) / 2;
+}
+
+/**
  * Стек числом. У кэша он один — 100bb; в MTT глубина подписана диапазоном,
  * и берётся его середина («10-14bb» → 12), а у открытого сверху — нижняя
  * граница («25bb+» → 25): именно на ней чарт и начинает работать.
@@ -342,6 +357,8 @@ export function sceneFor(p: RangePreset): Scene {
       // Отдельный чарт «SB vs BB» — единственный на этих страницах, где места
       // названы: там и стол собирается из настоящих позиций.
       if (p.position.includes("SB vs BB")) {
+        // Блайнд на блайнд: 3бетит BB, а он к опену SB как раз в позиции.
+        const bb3bet = threeBetSize(3, true);
         return fromSlots(
           [
             ...folded(1, 4),
@@ -351,17 +368,24 @@ export function sceneFor(p: RangePreset): Scene {
             },
             {
               seat: seat("BB", { note: `3бет ${pct}%` }),
-              step: { kind: "3bet", label: "3бет", amount: 11 },
+              step: { kind: "3bet", label: `3бет ${bb3bet}bb`, amount: bb3bet },
             },
           ],
           "SB",
         );
       }
+      const openSize = 2.5;
+      // Наша позиция задана группой чарта, у 3бетора она противоположна.
+      const villainSize = threeBetSize(openSize, g === "DEF3BETOOP");
       const villain = {
         seat: vague("villain", `3бет ${pct}%`),
-        step: { kind: "3bet" as const, label: "3бет", amount: 11 },
+        step: {
+          kind: "3bet" as const,
+          label: `3бет ${villainSize}bb`,
+          amount: villainSize,
+        },
       };
-      const open = { kind: "raise" as const, label: "Опен 2.5bb", amount: 2.5 };
+      const open = { kind: "raise" as const, label: `Опен ${openSize}bb`, amount: openSize };
       if (g === "DEF3BETIP") {
         // В позиции мы остаёмся, только если 3бет пришёл с блайнда: иначе
         // 3бетор сидел бы после нас. Значит, второй блайнд уже сдал.
@@ -394,8 +418,17 @@ export function sceneFor(p: RangePreset): Scene {
       const { seat: op, size } = sbVsBb ? { seat: "SB", size: 3 } : openerOf(p);
       const hero = sbVsBb ? "BB" : "blind";
       const raise = { kind: "raise" as const, label: `Рейз ${size}bb`, amount: size };
-      const threeBet = { kind: "3bet" as const, label: "3бет", amount: 12 };
-      const answer: SceneStep = { seat: op, kind: "4bet", label: "4бет", amount: 27 };
+      // 3бетим мы: против опена с блайнда — вне позиции, и только на BB против
+      // SB оказываемся в позиции.
+      const my3bet = threeBetSize(size, sbVsBb);
+      const my4bet = fourBetSize(my3bet);
+      const threeBet = { kind: "3bet" as const, label: `3бет ${my3bet}bb`, amount: my3bet };
+      const answer: SceneStep = {
+        seat: op,
+        kind: "4bet",
+        label: `4бет ${my4bet}bb`,
+        amount: my4bet,
+      };
 
       if (sbVsBb) {
         return fromSlots(

@@ -720,6 +720,29 @@ describe("стол тренажёра", () => {
     expect(potAfter(scene.steps, scene.steps.length)).toBe(4);
   });
 
+  it("3бет считается от опена: вне позиции ×4, в позиции ×3", () => {
+    const bet = (id: string, kind: string) =>
+      sceneFor(presetById(id)!).steps.find((s) => s.kind === kind)!.amount;
+    // Защита в позиции — значит, 3бетнул тот, кто вне позиции: 2.5 × 4.
+    expect(bet("def3bet-ip-12", "3bet")).toBe(10);
+    // И наоборот: мы вне позиции, 3бетор в позиции — 2.5 × 3.
+    expect(bet("def3bet-oop-12", "3bet")).toBe(7.5);
+    // Блайнд на блайнд: 3бетит BB, а он к опену SB в позиции — 3 × 3.
+    expect(bet("def3bet-oop-18", "3bet")).toBe(9);
+    // Свой 3бет с блайнда — вне позиции: против опена UTG 3bb это 12.
+    expect(bet("blinds4bet-vs-utg", "3bet")).toBe(12);
+    expect(bet("blinds4bet-vs-bu-25", "3bet")).toBe(10);
+    // На BB против SB мы в позиции — 3 × 3, а не 12.
+    expect(bet("blinds4bet-bb-vs-sb", "3bet")).toBe(9);
+    // 4бет опенера считается от нашего 3бета и обязан быть больше него.
+    for (const p of ALL_PRESETS.filter((x) => x.group === "BLINDS4BET")) {
+      const steps = sceneFor(p).steps;
+      const three = steps.find((s) => s.kind === "3bet")!.amount!;
+      const four = steps.find((s) => s.kind === "4bet")!.amount!;
+      expect(four, p.id).toBeGreaterThan(three * 2);
+    }
+  });
+
   it("в изолэйт-спотах кто-то до нас действительно влимпил", () => {
     // На самой ранней позиции стула перед нами нет — лимпер садится отдельным
     // безымянным местом, и лимп всё равно обязан быть.
