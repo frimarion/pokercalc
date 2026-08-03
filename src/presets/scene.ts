@@ -60,6 +60,11 @@ export interface Scene {
   buttonId: string;
   /** Действия до хода героя — проигрываются по очереди. */
   steps: SceneStep[];
+  /**
+   * Анте, bb. В MTT это big blind ante: за стол его платит один BB, и в банке
+   * он лежит ещё до первого решения. В кэше анте нет — там 0.
+   */
+  ante: number;
   /** Глубина стека, если она часть спота (MTT). */
   stack?: string;
   /** Она же числом, bb: у кэша 100. */
@@ -91,12 +96,27 @@ function fourBetSize(threeBet: number): number {
 }
 
 /**
- * Стек числом. У кэша он один — 100bb; в MTT глубина подписана диапазоном,
- * и берётся его середина («10-14bb» → 12), а у открытого сверху — нижняя
- * граница («25bb+» → 25): именно на ней чарт и начинает работать.
+ * Глубина каждого диапазона из пака — одним числом, чтобы за столом стояла
+ * конкретная сумма. Середина диапазона годится не везде: на «0-9bb» она даёт
+ * 5bb, а это уже не спот, а формальность — с такого стека пуш-фолд перестаёт
+ * быть выбором. Поэтому на коротких глубинах взята рабочая часть диапазона
+ * (8bb и 12bb), а у открытых сверху — нижняя граница, на ней чарт и
+ * начинает работать.
  */
+const MTT_STACK_BB: Record<string, number> = {
+  "0-9bb": 8,
+  "10-14bb": 12,
+  "16-22bb": 19,
+  "25bb+": 25,
+  "40bb+": 40,
+};
+
+/** Стек числом. У кэша он один — 100bb, в MTT задан глубиной спота. */
 function stackBb(stack?: string): number {
   if (!stack) return 100;
+  const known = MTT_STACK_BB[stack];
+  if (known !== undefined) return known;
+  // Незнакомая подпись: середина диапазона либо единственное число в ней.
   const nums = (stack.match(/\d+/g) ?? []).map(Number);
   if (nums.length === 0) return 100;
   return nums.length > 1 ? Math.round((nums[0] + nums[1]) / 2) : nums[0];
@@ -130,6 +150,8 @@ function finalize(
     heroId,
     buttonId: button.id,
     steps: [...blinds, ...steps],
+    // Восемь мест — это MTT-пак, а он весь считается с big blind ante.
+    ante: order === MTT_SEATS ? 1 : 0,
     stack,
     startStack: bb,
   };
@@ -575,8 +597,11 @@ export function sceneFor(p: RangePreset): Scene {
   }
 }
 
-/** Банк после всех показанных шагов — то, на что мы принимаем решение. */
-export function potAfter(steps: SceneStep[], upTo: number): number {
+/**
+ * Банк после всех показанных шагов — то, на что мы принимаем решение. Анте
+ * лежит в банке с самого начала: его ставят до раздачи, а не в свою очередь.
+ */
+export function potAfter(steps: SceneStep[], upTo: number, ante = 0): number {
   const bySeat = new Map<string, number>();
   for (const s of steps.slice(0, upTo)) {
     if (s.kind === "fold" || s.kind === "check") continue;
@@ -584,7 +609,7 @@ export function potAfter(steps: SceneStep[], upTo: number): number {
     // своего же блайнда кладёт 3bb всего, а не 3.5.
     bySeat.set(s.seat, Math.max(bySeat.get(s.seat) ?? 0, s.amount ?? 0));
   }
-  let pot = 0;
+  let pot = ante;
   for (const v of bySeat.values()) pot += v;
   return Math.round(pot * 10) / 10;
 }

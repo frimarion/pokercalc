@@ -776,6 +776,18 @@ describe("стол тренажёра", () => {
     }
   });
 
+  it("в MTT в банке лежит анте, в кэше его нет", () => {
+    for (const [id, scene] of SCENES) {
+      const mtt = scene.seats.length > 6;
+      expect(scene.ante, id).toBe(mtt ? 1 : 0);
+      // Анте лежит в банке ещё до первого хода — его ставят до раздачи.
+      expect(potAfter(scene.steps, 0, scene.ante), id).toBe(mtt ? 1 : 0);
+    }
+    // MTT-RFI: анте 1 + блайнды 1.5.
+    const mtt = sceneFor(presetById("mtt-rfi-co")!);
+    expect(potAfter(mtt.steps, mtt.steps.length, mtt.ante)).toBe(2.5);
+  });
+
   it("баттон стоит у места на BU", () => {
     for (const [id, scene] of SCENES) {
       const bu = scene.seats.find((s) => s.pos === "BU")!;
@@ -811,9 +823,15 @@ describe("стол тренажёра", () => {
         scene.startStack,
       );
     }
-    // Кэш — 100bb, MTT — из подписи глубины: «10-14bb» → середина.
+    // Кэш — 100bb, MTT — из подписи глубины спота.
     expect(sceneFor(presetById("rfi-utg")!).startStack).toBe(100);
     expect(sceneFor(presetById("mtt-rfi-co")!).startStack).toBe(25);
+    // Пуш-фолд: 8bb на чарте 0-9bb и 12bb на 10-14bb. Середина диапазона тут
+    // не годится — на 5bb пуш-фолд перестаёт быть выбором.
+    for (const p of ALL_PRESETS.filter((x) => x.group === "MTTPUSH")) {
+      const want = p.position.includes("0-9bb") ? 8 : 12;
+      expect(sceneFor(p).startStack, p.id).toBe(want);
+    }
   });
 
   it("места, заданные процентом или группой, помечены как неточные", () => {

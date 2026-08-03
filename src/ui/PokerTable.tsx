@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Scene, SceneActionKind, SceneStep, potAfter } from "../presets/scene";
+import { Scene, SceneActionKind, SceneSeat, SceneStep, potAfter } from "../presets/scene";
 import { SUIT_SYMBOLS, SuitIndex } from "../engine/cards";
 import { suitColor } from "./colors";
 import { useIsCompact } from "./useMedia";
@@ -203,7 +203,9 @@ export function PokerTable({
     return m;
   }, [scene, shown]);
 
-  const pot = potAfter(scene.steps, shown);
+  const pot = potAfter(scene.steps, shown, scene.ante);
+  /** Анте платит один BB — у него это списание сверх блайнда. */
+  const anteOf = (s: SceneSeat) => (s.pos === "BB" ? scene.ante : 0);
   const heroIndex = Math.max(0, scene.seats.findIndex((s) => s.id === scene.heroId));
   const shape = tableShape(compact, scene.seats.length);
 
@@ -236,9 +238,11 @@ export function PokerTable({
             <span className="text-[11px] font-bold text-amber-200/90">Банк {pot}bb</span>
           </>
         )}
-        {scene.stack && (
+        {(scene.stack || scene.ante > 0) && (
           <span className="text-[10px] uppercase tracking-wider text-emerald-300/50">
-            стек {scene.stack}
+            {[scene.stack && `стек ${scene.stack}`, scene.ante > 0 && `анте ${scene.ante}bb`]
+              .filter(Boolean)
+              .join(" · ")}
           </span>
         )}
       </div>
@@ -307,7 +311,7 @@ export function PokerTable({
                 <span
                   className={`font-semibold text-amber-200/60 ${compact ? "text-[8px]" : "text-[9px]"}`}
                 >
-                  {fmtBb(s.stack - (bet ?? 0))}bb
+                  {fmtBb(s.stack - (bet ?? 0) - anteOf(s))}bb
                 </span>
               </span>
               {isHero ? (
