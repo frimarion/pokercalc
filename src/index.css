@@ -10,6 +10,61 @@ body,
   height: 100%;
 }
 
+/* Анимации стола в тренажёре (ui/PokerTable.tsx) */
+@keyframes pc-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes pc-deal {
+  from {
+    opacity: 0;
+    transform: translateY(-28px) rotate(-8deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(0);
+  }
+}
+
+/* Пульсация места героя: «ход за тобой». */
+@keyframes pc-turn {
+  0%,
+  100% {
+    box-shadow: 0 0 18px rgba(52, 199, 123, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 26px rgba(52, 199, 123, 0.6);
+  }
+}
+
+.pc-pop {
+  animation: pc-pop 0.22s ease-out both;
+}
+
+.pc-deal {
+  animation: pc-deal 0.3s ease-out both;
+}
+
+.pc-turn {
+  animation: pc-turn 1.6s ease-in-out infinite;
+}
+
+/* Стол должен работать и без анимаций — они здесь только подсказка. */
+@media (prefers-reduced-motion: reduce) {
+  .pc-pop,
+  .pc-deal,
+  .pc-turn {
+    animation: none;
+  }
+}
+
 body {
   margin: 0;
   background: #0a0e0d;

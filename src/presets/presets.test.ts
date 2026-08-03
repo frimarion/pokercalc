@@ -33,6 +33,7 @@ import {
   handFamily,
   TRAINER_SECTIONS,
 } from "./quiz";
+import { Scene, potAfter, sceneFor } from "./scene";
 
 /** Руки того же ряда, что стоят ниже указанной границы. */
 function handsBelow(hand: string, edge: string): string[] {
@@ -609,5 +610,75 @@ describe("Blinds Defense vs 4bet (стр. 8)", () => {
         expect(w.raise + w.call, `${p.id}: ${cell.label}`).toBeLessThanOrEqual(1.0001);
       }
     }
+  });
+});
+
+describe("стол тренажёра", () => {
+  const SCENES: [string, Scene][] = ALL_PRESETS.map((p) => [p.id, sceneFor(p)]);
+
+  it.each(SCENES)("%s — герой сидит за столом ровно один", (_id, scene) => {
+    const heroes = scene.seats.filter((s) => s.hero);
+    expect(heroes).toHaveLength(1);
+    expect(heroes[0].id).toBe(scene.heroId);
+  });
+
+  it.each(SCENES)("%s — все ходы принадлежат местам за столом", (_id, scene) => {
+    const ids = new Set(scene.seats.map((s) => s.id));
+    expect(new Set(scene.seats.map((s) => s.id)).size).toBe(scene.seats.length);
+    for (const step of scene.steps) expect(ids.has(step.seat)).toBe(true);
+  });
+
+  it.each(SCENES)("%s — за столом есть соперник и что-то уже в банке", (_id, scene) => {
+    // Пустой стол ничего не объясняет: даже в RFI стоят блайнды.
+    expect(scene.seats.length).toBeGreaterThanOrEqual(2);
+    expect(potAfter(scene.steps, scene.steps.length)).toBeGreaterThan(0);
+  });
+
+  it("герой не ходит дважды подряд до своего решения", () => {
+    // Свой ход у героя в сцене бывает (опен перед 3бетом соперника), но
+    // последним всегда должен быть чужой — иначе непонятно, на что отвечаем.
+    for (const [id, scene] of SCENES) {
+      const last = scene.steps[scene.steps.length - 1];
+      if (scene.steps.some((s) => s.seat === scene.heroId && s.kind !== "blind")) {
+        expect(last.seat, `${id}: последним ходит герой`).not.toBe(scene.heroId);
+      }
+    }
+  });
+
+  it("в RFI все до героя сдали, а ставки только у блайндов", () => {
+    const scene = sceneFor(presetById("rfi-co")!);
+    const acted = scene.steps.filter((s) => s.kind !== "blind");
+    expect(acted.every((s) => s.kind === "fold")).toBe(true);
+    expect(acted.map((s) => s.seat)).toEqual(["UTG", "MP"]);
+    expect(potAfter(scene.steps, scene.steps.length)).toBe(1.5);
+  });
+
+  it("в защите BB опенер ставит свой сайзинг, а SB сдаёт", () => {
+    const scene = sceneFor(presetById("bbdef-vs-bu-25")!);
+    const raise = scene.steps.find((s) => s.kind === "raise")!;
+    expect(raise.seat).toBe("BU");
+    expect(raise.amount).toBe(2.5);
+    expect(scene.steps.some((s) => s.seat === "SB" && s.kind === "fold")).toBe(true);
+    // Рейз не складывается с блайндом: 2.5 + 0.5 + 1.
+    expect(potAfter(scene.steps, scene.steps.length)).toBe(4);
+  });
+
+  it("в изолэйт-спотах кто-то до нас действительно влимпил", () => {
+    // На самой ранней позиции стула перед нами нет — лимпер садится отдельным
+    // безымянным местом, и лимп всё равно обязан быть.
+    for (const p of ALL_PRESETS.filter((x) => x.group === "ISO" || x.group === "MTTISO")) {
+      const scene = sceneFor(p);
+      const limps = scene.steps.filter((s) => s.kind === "limp");
+      expect(limps.length, `${p.id}: лимпа нет`).toBeGreaterThan(0);
+      for (const l of limps) expect(l.seat, `${p.id}: лимпит сам герой`).not.toBe(scene.heroId);
+    }
+  });
+
+  it("места, заданные процентом или группой, помечены как неточные", () => {
+    // Чарт «3бет 12%» не называет место соперника — подставлять его нельзя.
+    const vague = sceneFor(presetById("def3bet-oop-12")!);
+    expect(vague.seats.every((s) => s.exact)).toBe(false);
+    // А в кэшевом RFI места известны все.
+    expect(sceneFor(presetById("rfi-utg")!).seats.every((s) => s.exact)).toBe(true);
   });
 });

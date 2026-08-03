@@ -12,8 +12,9 @@ import {
   sectionGroupLabel,
 } from "../presets/quiz";
 import { PresetGroup, presetById } from "../presets";
-import { SUIT_SYMBOLS, SuitIndex } from "../engine/cards";
-import { suitColor } from "./colors";
+import { SceneActionKind, sceneFor } from "../presets/scene";
+import { HeroAction, PokerTable } from "./PokerTable";
+import { SuitIndex } from "../engine/cards";
 
 /** Конкретные карты для ярлыка — чтобы рука выглядела как за столом. */
 function dealHand(label: string): { rank: string; suit: SuitIndex }[] {
@@ -36,15 +37,31 @@ function dealHand(label: string): { rank: string; suit: SuitIndex }[] {
   return [{ rank: a, suit: s1 }, { rank: b, suit: s2 }];
 }
 
-function Card({ rank, suit }: { rank: string; suit: SuitIndex }) {
-  return (
-    <div className="flex h-20 w-14 flex-col items-center justify-center rounded-lg border border-white/15 bg-[#141a18] text-2xl font-black">
-      <span style={{ color: suitColor(suit) }}>{rank}</span>
-      <span style={{ color: suitColor(suit) }} className="text-xl leading-none">
-        {SUIT_SYMBOLS[suit]}
-      </span>
-    </div>
-  );
+/**
+ * Чем ответ игрока выглядит за столом. Один и тот же `raise` — это опен на
+ * RFI, 4бет в защите от 3бета и олл-ин на коротком стеке: облако над местом
+ * должно называться и краситься так же, как чужие действия.
+ */
+function sceneKindOf(group: PresetGroup, answer: QuizAnswer): SceneActionKind {
+  if (answer === "fold") return "fold";
+  if (answer === "call") return group === "ISO" || group === "MTTISO" ? "limp" : "call";
+  switch (group) {
+    case "MTTPUSH":
+    case "MTT3BETPUSH":
+    case "BLINDS4BET":
+      return "push";
+    case "DEF3BETIP":
+    case "DEF3BETOOP":
+    case "MTTDEF3BET":
+      return "4bet";
+    case "RFI":
+    case "ISO":
+    case "MTTRFI":
+    case "MTTISO":
+      return "raise";
+    default:
+      return "3bet";
+  }
 }
 
 export function Trainer() {
@@ -56,6 +73,8 @@ export function Trainer() {
   const [question, setQuestion] = useState<Question | null>(null);
   const [cards, setCards] = useState<{ rank: string; suit: SuitIndex }[]>([]);
   const [answered, setAnswered] = useState<QuizAnswer | null>(null);
+  // Номер раздачи: по нему стол переигрывает сцену даже когда чарт тот же.
+  const [deal, setDeal] = useState(0);
   const [score, setScore] = useState({ right: 0, total: 0, streak: 0, best: 0 });
 
   const pool = useMemo(
@@ -72,6 +91,7 @@ export function Trainer() {
     setQuestion(q);
     setCards(q ? dealHand(q.hand) : []);
     setAnswered(null);
+    setDeal((n) => n + 1);
   };
 
   const answer = (key: QuizAnswer) => {
@@ -120,9 +140,18 @@ export function Trainer() {
     : [];
   const wasRight = answered !== null && correctKeys.includes(answered);
   const edges = question ? actionEdges(question.preset, question.hand) : [];
+  const scene = useMemo(() => (question ? sceneFor(question.preset) : null), [question]);
+  const heroAction: HeroAction | null =
+    question && answered
+      ? {
+          label: question.spot.answers.find((a) => a.key === answered)?.label ?? answered,
+          kind: sceneKindOf(question.preset.group, answered),
+          correct: wasRight,
+        }
+      : null;
 
   return (
-    <div className="mx-auto flex max-w-[760px] flex-col gap-4">
+    <div className="mx-auto flex max-w-[860px] flex-col gap-4">
       {/* Что тренируем: сначала формат, потом группы внутри него */}
       <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-[#0d1210] px-3 py-2">
         <div className="flex items-center gap-1.5">
@@ -209,14 +238,21 @@ export function Trainer() {
           <div className="flex flex-col gap-4">
             <p className="text-sm text-neutral-300">{question.spot.situation}</p>
 
-            <div className="flex items-center gap-3">
-              {cards.map((c, i) => (
-                <Card key={i} rank={c.rank} suit={c.suit} />
-              ))}
-              <span className="ml-1 text-lg font-bold text-neutral-500">{question.hand}</span>
+            {/* Стол: места, чужие действия по очереди, наша рука на руках */}
+            {scene && (
+              <PokerTable
+                scene={scene}
+                cards={cards}
+                heroAction={heroAction}
+                questionKey={String(deal)}
+              />
+            )}
+
+            <div className="text-center text-sm font-bold text-neutral-400">
+              Ваша рука: <span className="text-neutral-100">{question.hand}</span>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap justify-center gap-2">
               {question.spot.answers.map((a) => {
                 const isRight = correctKeys.includes(a.key);
                 const chosen = answered === a.key;
