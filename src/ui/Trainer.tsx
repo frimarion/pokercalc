@@ -75,6 +75,7 @@ export function Trainer() {
   // было бы непонятно, по какому источнику отвечать.
   const [section, setSection] = useState<TrainerSection>(TRAINER_SECTIONS[0]);
   const [enabled, setEnabled] = useState<Set<PresetGroup>>(new Set(section.groups));
+  const [spotsOpen, setSpotsOpen] = useState(false);
   const [question, setQuestion] = useState<Question | null>(null);
   const [cards, setCards] = useState<{ rank: string; suit: SuitIndex }[]>([]);
   const [answered, setAnswered] = useState<QuizAnswer | null>(null);
@@ -156,10 +157,12 @@ export function Trainer() {
       : null;
 
   return (
-    <div className="mx-auto flex max-w-[860px] flex-col gap-4">
-      {/* Что тренируем: сначала формат, потом группы внутри него */}
+    <div className="mx-auto flex max-w-[860px] flex-col gap-3 sm:gap-4">
+      {/* Что тренируем: сначала формат, потом группы внутри него. На телефоне
+          список спотов занимал пол-экрана над вопросом, поэтому он свёрнут:
+          развернуть его нужно раз за сессию, а стол — каждую раздачу. */}
       <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-[#0d1210] px-3 py-2">
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <span className="mr-1 text-[11px] uppercase tracking-wider text-neutral-500">
             Формат
           </span>
@@ -167,7 +170,7 @@ export function Trainer() {
             <button
               key={s.key}
               onClick={() => switchSection(s)}
-              className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition ${
+              className={`rounded-md px-3 py-1.5 text-[11px] font-bold transition sm:px-2.5 sm:py-1 ${
                 s.key === section.key
                   ? "bg-emerald-500 text-black"
                   : "border border-white/10 text-neutral-400 hover:bg-white/5"
@@ -176,17 +179,25 @@ export function Trainer() {
               {s.label}
             </button>
           ))}
-          <span className="ml-1 text-[11px] text-neutral-600">{section.note}</span>
+          <span className="ml-1 hidden text-[11px] text-neutral-600 sm:inline">{section.note}</span>
+          <button
+            onClick={() => setSpotsOpen((v) => !v)}
+            className="ml-auto rounded-md px-2 py-1.5 text-[11px] font-semibold text-neutral-400 transition hover:bg-white/5 sm:hidden"
+          >
+            Споты {enabled.size}/{section.groups.length} {spotsOpen ? "▲" : "▼"}
+          </button>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-[11px] uppercase tracking-wider text-neutral-500">
+        <div
+          className={`${spotsOpen ? "flex" : "hidden"} flex-wrap items-center gap-1.5 sm:flex`}
+        >
+          <span className="mr-1 hidden text-[11px] uppercase tracking-wider text-neutral-500 sm:inline">
             Споты
           </span>
           {section.groups.map((g) => (
             <button
               key={g}
               onClick={() => toggleGroup(g)}
-              className={`rounded-md px-2 py-1 text-[11px] font-semibold transition ${
+              className={`rounded-md px-2 py-1.5 text-[11px] font-semibold transition sm:py-1 ${
                 enabled.has(g)
                   ? "bg-emerald-500 text-black"
                   : "border border-white/10 text-neutral-400 hover:bg-white/5"
@@ -199,7 +210,7 @@ export function Trainer() {
       </div>
 
       {/* Счёт */}
-      <div className="flex items-center gap-4 rounded-xl border border-white/10 bg-[#0d1210] px-4 py-2 text-xs">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-white/10 bg-[#0d1210] px-3 py-2 text-xs sm:px-4">
         <span className="text-neutral-400">
           Верно <span className="font-bold text-neutral-100">{score.right}</span> из{" "}
           <span className="font-bold text-neutral-100">{score.total}</span>
@@ -225,7 +236,7 @@ export function Trainer() {
       </div>
 
       {/* Вопрос */}
-      <div className="rounded-2xl border border-white/10 bg-[#0b100e] p-5">
+      <div className="rounded-2xl border border-white/10 bg-[#0b100e] p-3 sm:p-5">
         {!question ? (
           <div className="flex flex-col items-center gap-4 py-8">
             <p className="max-w-sm text-center text-sm text-neutral-400">
@@ -257,6 +268,8 @@ export function Trainer() {
               Ваша рука: <span className="text-neutral-100">{question.hand}</span>
             </div>
 
+            {/* Кнопки ответа — главный элемент управления на телефоне: тянутся
+                на всю ширину и держат высоту под палец (44px). */}
             <div className="flex flex-wrap justify-center gap-2">
               {question.spot.answers.map((a) => {
                 const isRight = correctKeys.includes(a.key);
@@ -272,7 +285,7 @@ export function Trainer() {
                     key={a.key}
                     onClick={() => answer(a.key)}
                     disabled={answered !== null}
-                    className={`rounded-lg px-4 py-2 text-sm font-bold transition ${cls}`}
+                    className={`min-h-11 min-w-[7rem] flex-1 rounded-lg px-4 py-2 text-sm font-bold transition sm:min-h-0 sm:flex-none ${cls}`}
                   >
                     {a.label}
                     {answered && (
@@ -323,7 +336,7 @@ export function Trainer() {
                 )}
                 <button
                   onClick={() => ask()}
-                  className="mt-1 self-start rounded-lg bg-emerald-500 px-4 py-1.5 text-sm font-bold text-black transition hover:bg-emerald-400"
+                  className="mt-1 min-h-11 w-full rounded-lg bg-emerald-500 px-4 py-1.5 text-sm font-bold text-black transition hover:bg-emerald-400 sm:min-h-0 sm:w-auto sm:self-start"
                 >
                   Дальше →
                 </button>

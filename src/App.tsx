@@ -38,7 +38,7 @@ export default function App() {
   const tab = (m: Mode, label: string) => (
     <button
       onClick={() => setMode(m)}
-      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+      className={`rounded-lg px-2.5 py-2 text-xs font-semibold transition sm:px-3 sm:py-1.5 ${
         mode === m
           ? "bg-emerald-500 text-black"
           : "border border-white/10 text-neutral-400 hover:bg-white/5"
@@ -51,12 +51,14 @@ export default function App() {
   return (
     <div className="min-h-full">
       {/* Шапка */}
-      <header className="flex items-center gap-3 border-b border-white/10 px-6 py-3">
+      {/* Шапка переносится по строкам: на телефоне название + три вкладки в
+          один ряд не влезали, и «История рук» уезжала за край экрана. */}
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-white/10 px-3 py-3 sm:px-6">
         <span className="text-emerald-400">📈</span>
         <span className="text-lg font-black tracking-tight">
           Poker<span className="text-emerald-400">Calc</span>
         </span>
-        <div className="ml-3 flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 sm:ml-3">
           {tab("ranges", "Диапазоны")}
           {tab("trainer", "Тренажёр")}
           {tab("hands", "История рук")}
@@ -64,7 +66,7 @@ export default function App() {
         {mode === "ranges" && <HeaderTools />}
       </header>
 
-      <main className="mx-auto max-w-[1400px] px-6 py-6">
+      <main className="mx-auto max-w-[1400px] px-3 py-4 sm:px-6 sm:py-6">
         {mode === "trainer" ? (
           <Trainer />
         ) : mode === "hands" ? (

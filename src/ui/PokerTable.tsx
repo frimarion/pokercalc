@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Scene, SceneActionKind, SceneStep, potAfter } from "../presets/scene";
 import { SUIT_SYMBOLS, SuitIndex } from "../engine/cards";
 import { suitColor } from "./colors";
+import { useIsCompact } from "./useMedia";
 
 /** Пауза между ходами соперников, мс. */
 const STEP_MS = 520;
@@ -28,17 +29,35 @@ const KIND_STYLE: Record<SceneActionKind, { bg: string; text: string }> = {
 };
 
 /**
+ * Форма стола. На десктопе он лежачий (16:9) с широким горизонтальным
+ * радиусом, на телефоне — стоячий, как в мобильных покерных клиентах: в
+ * ширину места разъехаться некуда, а вниз экран длинный. Радиусы меняются
+ * вместе с пропорцией, иначе места налезают друг на друга (на 8-max SB
+ * буквально скрывался за BB).
+ */
+function tableShape(compact: boolean, seats: number) {
+  if (!compact) return { ratio: 16 / 9, rx: 41, ry: 34, inset: "8%" };
+  // 8-max тянется вверх сильнее: там по три места в каждой боковой колонке.
+  return { ratio: seats > 6 ? 4 / 5 : 6 / 5, rx: 35, ry: 40, inset: "5%" };
+}
+
+/**
  * Места по эллипсу: герой всегда внизу по центру, остальные разложены по
  * кругу в порядке хода. Так стол читается одинаково в любом споте.
  */
-function seatPos(index: number, heroIndex: number, n: number): { left: string; top: string } {
+function seatPos(
+  index: number,
+  heroIndex: number,
+  n: number,
+  shape: { rx: number; ry: number },
+): { left: string; top: string } {
   const rel = (index - heroIndex + n) % n;
   const angle = (Math.PI / 2) + (rel * 2 * Math.PI) / n;
   return {
-    left: `${50 + 41 * Math.cos(angle)}%`,
+    left: `${50 + shape.rx * Math.cos(angle)}%`,
     // По вертикали радиус меньше: место героя внизу — самое высокое (карты
     // крупнее рубашек), и на 39% его фишки уже вылезали за пределы стола.
-    top: `${50 + 34 * Math.sin(angle)}%`,
+    top: `${50 + shape.ry * Math.sin(angle)}%`,
   };
 }
 
@@ -47,20 +66,32 @@ function fmtBb(v: number): string {
   return String(Math.round(v * 10) / 10);
 }
 
-function Chips({ amount, tone }: { amount: number; tone: string }) {
+function Chips({ amount, tone, compact }: { amount: number; tone: string; compact: boolean }) {
   return (
-    <div className="pc-pop flex items-center gap-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-bold shadow">
-      <span className={`inline-block h-2.5 w-2.5 rounded-full border border-black/40 ${tone}`} />
+    <div
+      className={`pc-pop flex items-center gap-1 rounded-full bg-black/60 px-1.5 py-0.5 font-bold shadow ${
+        compact ? "text-[9px]" : "text-[10px]"
+      }`}
+    >
+      <span
+        className={`inline-block rounded-full border border-black/40 ${
+          compact ? "h-2 w-2" : "h-2.5 w-2.5"
+        } ${tone}`}
+      />
       <span className="text-neutral-200">{amount}bb</span>
     </div>
   );
 }
 
-function MiniCard({ rank, suit }: { rank: string; suit: SuitIndex }) {
+function MiniCard({ rank, suit, compact }: { rank: string; suit: SuitIndex; compact: boolean }) {
   return (
-    <div className="pc-deal flex h-11 w-8 flex-col items-center justify-center rounded-md border border-white/20 bg-[#111815] text-sm font-black leading-none">
+    <div
+      className={`pc-deal flex flex-col items-center justify-center rounded-md border border-white/20 bg-[#111815] font-black leading-none ${
+        compact ? "h-8 w-6 text-xs" : "h-11 w-8 text-sm"
+      }`}
+    >
       <span style={{ color: suitColor(suit) }}>{rank}</span>
-      <span style={{ color: suitColor(suit) }} className="text-xs">
+      <span style={{ color: suitColor(suit) }} className={compact ? "text-[10px]" : "text-xs"}>
         {SUIT_SYMBOLS[suit]}
       </span>
     </div>
@@ -77,13 +108,15 @@ function DealerButton() {
 }
 
 /** Рубашка карт — у всех, кто ещё в раздаче. */
-function CardBacks() {
+function CardBacks({ compact }: { compact: boolean }) {
   return (
     <div className="flex gap-0.5">
       {[0, 1].map((i) => (
         <div
           key={i}
-          className="h-6 w-4 rounded-[3px] border border-white/15 bg-gradient-to-br from-[#1d3a30] to-[#12241d]"
+          className={`rounded-[3px] border border-white/15 bg-gradient-to-br from-[#1d3a30] to-[#12241d] ${
+            compact ? "h-4 w-3" : "h-6 w-4"
+          }`}
         />
       ))}
     </div>
@@ -104,6 +137,7 @@ export function PokerTable({
 }) {
   const [shown, setShown] = useState(0);
   const timer = useRef<number | null>(null);
+  const compact = useIsCompact();
 
   const reduced =
     typeof window !== "undefined" &&
@@ -171,14 +205,19 @@ export function PokerTable({
 
   const pot = potAfter(scene.steps, shown);
   const heroIndex = Math.max(0, scene.seats.findIndex((s) => s.id === scene.heroId));
+  const shape = tableShape(compact, scene.seats.length);
 
   return (
     <div
       onClick={done ? undefined : skip}
-      className={`relative aspect-[16/9] w-full select-none ${done ? "" : "cursor-pointer"}`}
+      className={`relative w-full select-none ${done ? "" : "cursor-pointer"}`}
+      style={{ aspectRatio: shape.ratio }}
     >
       {/* Сукно */}
-      <div className="absolute inset-[8%] rounded-[50%] border-4 border-[#0d1a15] bg-[radial-gradient(ellipse_at_center,#17352b_0%,#0f231d_70%,#0b1a15_100%)] shadow-[inset_0_0_60px_rgba(0,0,0,0.6)]" />
+      <div
+        className="absolute rounded-[50%] border-4 border-[#0d1a15] bg-[radial-gradient(ellipse_at_center,#17352b_0%,#0f231d_70%,#0b1a15_100%)] shadow-[inset_0_0_60px_rgba(0,0,0,0.6)]"
+        style={{ inset: shape.inset }}
+      />
 
       {/* Банк */}
       {/* Чуть выше центра: снизу подступает облако действия героя, сверху —
@@ -205,7 +244,7 @@ export function PokerTable({
       </div>
 
       {scene.seats.map((s, i) => {
-        const pos = seatPos(i, heroIndex, scene.seats.length);
+        const pos = seatPos(i, heroIndex, scene.seats.length, shape);
         const step = acted.get(s.id);
         const bet = bets.get(s.id);
         const folded = step?.kind === "fold";
@@ -231,10 +270,12 @@ export function PokerTable({
             style={{ ...pos, transform: `translate(-50%, ${isHero ? "-72%" : "-50%"})` }}
           >
             {/* Облако действия — над местом */}
-            <div className="h-5">
+            <div className={compact ? "h-4" : "h-5"}>
               {(step && step.kind !== "blind") || action ? (
                 <span
-                  className={`pc-pop inline-block rounded-full px-2 py-0.5 text-[10px] font-bold shadow ${bubbleClass}`}
+                  className={`pc-pop inline-block whitespace-nowrap rounded-full px-1.5 py-0.5 font-bold shadow ${
+                    compact ? "text-[9px]" : "px-2 text-[10px]"
+                  } ${bubbleClass}`}
                 >
                   {action ? action.label : step!.label}
                 </span>
@@ -243,7 +284,9 @@ export function PokerTable({
 
             {/* Само место */}
             <div
-              className={`relative flex flex-col items-center gap-1 rounded-xl border px-2.5 py-1.5 transition-all duration-300 ${
+              className={`relative flex flex-col items-center gap-1 rounded-xl border transition-all duration-300 ${
+                compact ? "gap-0.5 px-1.5 py-1" : "px-2.5 py-1.5"
+              } ${
                 isHero
                   ? "border-emerald-400/70 bg-[#10201a] shadow-[0_0_18px_rgba(52,199,123,0.25)]"
                   : "border-white/10 bg-[#0e1512]"
@@ -255,40 +298,51 @@ export function PokerTable({
               {/* Позиция и стек одной строкой, как в покерных клиентах: место
                   и так выше остальных из-за карт, лишний ряд ему ни к чему. */}
               <span
-                className={`flex items-baseline gap-1 text-[11px] font-bold ${
-                  isHero ? "text-emerald-300" : s.exact ? "text-neutral-300" : "text-neutral-500"
-                }`}
+                className={`flex items-baseline gap-1 whitespace-nowrap font-bold ${
+                  compact ? "text-[10px]" : "text-[11px]"
+                } ${isHero ? "text-emerald-300" : s.exact ? "text-neutral-300" : "text-neutral-500"}`}
               >
                 {s.pos}
-                {isHero && " (вы)"}
-                <span className="text-[9px] font-semibold text-amber-200/60">
+                {isHero && !compact && " (вы)"}
+                <span
+                  className={`font-semibold text-amber-200/60 ${compact ? "text-[8px]" : "text-[9px]"}`}
+                >
                   {fmtBb(s.stack - (bet ?? 0))}bb
                 </span>
               </span>
               {isHero ? (
                 <div className="flex gap-1">
                   {cards.map((c, k) => (
-                    <MiniCard key={k} rank={c.rank} suit={c.suit} />
+                    <MiniCard key={k} rank={c.rank} suit={c.suit} compact={compact} />
                   ))}
                 </div>
               ) : folded ? (
-                <div className="h-6 text-[10px] leading-6 text-neutral-600">—</div>
+                <div
+                  className={`text-[10px] text-neutral-600 ${compact ? "h-4 leading-4" : "h-6 leading-6"}`}
+                >
+                  —
+                </div>
               ) : (
-                <CardBacks />
+                <CardBacks compact={compact} />
               )}
               {/* Чего чарт про это место НЕ говорит — приглушённой строкой:
                   позиция выведена из посадки, а подпись чарта вот эта. */}
               {s.note && (
-                <span className="max-w-[76px] truncate text-[9px] leading-none text-neutral-500">
+                <span
+                  className={`truncate leading-none text-neutral-500 ${
+                    compact ? "max-w-[56px] text-[8px]" : "max-w-[76px] text-[9px]"
+                  }`}
+                >
                   {s.note}
                 </span>
               )}
             </div>
 
             {/* Фишки перед местом */}
-            <div className="h-4">
+            <div className={compact ? "h-3.5" : "h-4"}>
               {bet !== undefined && !folded && (
                 <Chips
+                  compact={compact}
                   amount={bet}
                   tone={
                     step?.kind === "blind"
