@@ -652,6 +652,15 @@ describe("стол тренажёра", () => {
     for (const step of scene.steps) expect(ids.has(step.seat)).toBe(true);
   });
 
+  it("за столом полный состав, даже если места безымянные", () => {
+    // Стол не схлопывается до двух игроков оттого, что чарт задан процентом
+    // или группой мест: остальные сидят и сдают, просто без подписи.
+    for (const p of ALL_PRESETS) {
+      const size = p.group.startsWith("MTT") ? 8 : 6;
+      expect(sceneFor(p).seats.length, `${p.id}: не ${size}-max`).toBe(size);
+    }
+  });
+
   it.each(SCENES)("%s — за столом есть соперник и что-то уже в банке", (_id, scene) => {
     // Пустой стол ничего не объясняет: даже в RFI стоят блайнды.
     expect(scene.seats.length).toBeGreaterThanOrEqual(2);

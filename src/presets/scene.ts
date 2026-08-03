@@ -109,6 +109,79 @@ function vague(id: string, label: string): SceneSeat {
   return { id, label, hero: false, exact: false };
 }
 
+/**
+ * Безымянное место. За столом всегда шесть (кэш) или восемь (MTT) игроков, и
+ * они не исчезают оттого, что чарт задан процентом. Но и назвать их нельзя:
+ * если чарт говорит «3бет 12%», неизвестно, с какого стула он пришёл, а тогда
+ * неизвестны и места остальных. Поэтому такой стул честно подписан «?» —
+ * видно, что игрок есть и что он сдал, но позиция не выдумана.
+ */
+function unknown(i: number): SceneSeat {
+  return { id: `seat${i}`, label: "?", hero: false, exact: false };
+}
+
+const FOLD = { kind: "fold" as const, label: "Фолд" };
+
+/**
+ * Часть MTT-чартов подписана просто «EP» — это одна из ранних позиций, но
+ * какая именно, пак не уточняет. Стол при этом всё равно восьмиместный,
+ * поэтому перед таким героем садится безымянный ранний стул.
+ */
+const EARLY_PAD: Record<string, SceneSeat> = { early: { ...unknown(0), id: "early" } };
+
+function mttOrder(heroSeat: string): string[] {
+  return MTT_SEATS.includes(heroSeat)
+    ? MTT_SEATS
+    : ["early", heroSeat, ...MTT_SEATS.slice(2)];
+}
+
+interface Slot {
+  seat: SceneSeat;
+  /** Блайнд этого места — выставляется до всех решений. */
+  blind?: number;
+  /** Ход до решения героя. Нет — значит место ещё не ходило. */
+  step?: { kind: SceneActionKind; label: string; amount?: number };
+}
+
+/** Безымянные места, которые сдали до нас. */
+function folded(from: number, count: number): Slot[] {
+  return Array.from({ length: count }, (_, i) => ({ seat: unknown(from + i), step: FOLD }));
+}
+
+/** Безымянные места, до которых очередь ещё не дошла. */
+function waiting(from: number, count: number): Slot[] {
+  return Array.from({ length: count }, (_, i) => ({ seat: unknown(from + i) }));
+}
+
+/**
+ * Сцена из мест в порядке хода. Блайнды идут первыми (их ставят до решений),
+ * дальше ходы в порядке посадки, `extra` — то, что случилось после круга
+ * (ответ опенера на наш 3бет).
+ */
+function fromSlots(
+  slots: Slot[],
+  heroId: string,
+  opts: { extra?: SceneStep[]; stack?: string } = {},
+): Scene {
+  const blinds = slots
+    .filter((s) => s.blind !== undefined)
+    .map((s): SceneStep => ({
+      seat: s.seat.id,
+      kind: "blind",
+      label: s.blind! >= 1 ? "BB" : "SB",
+      amount: s.blind,
+    }));
+  const acts = slots
+    .filter((s) => s.step)
+    .map((s): SceneStep => ({ seat: s.seat.id, ...s.step! }));
+  return {
+    seats: slots.map((s) => s.seat),
+    heroId,
+    steps: [...blinds, ...acts, ...(opts.extra ?? [])],
+    stack: opts.stack,
+  };
+}
+
 /** Процент из подписи чарта: «OOP vs 3bet 12%» → «12%». */
 function percentOf(p: RangePreset): string {
   return p.position.match(/(\d+)%/)?.[1] ?? "";
@@ -138,11 +211,17 @@ function isoRing(order: string[], heroSeat: string): Builder {
   const heroIdx = order.indexOf(heroSeat);
   const limp = { kind: "limp" as const, label: "Лимп", amount: 1 };
   if (heroIdx > 0) {
-    return withBlinds(ring(order, heroSeat, { seat: order[heroIdx - 1], ...limp }), order);
+    return withBlinds(
+      ring(order, heroSeat, { seat: order[heroIdx - 1], ...limp }, EARLY_PAD),
+      order,
+    );
   }
   const full = ["limper", ...order];
   return withBlinds(
-    ring(full, heroSeat, { seat: "limper", ...limp }, { limper: vague("limper", "лимпер") }),
+    ring(full, heroSeat, { seat: "limper", ...limp }, {
+      ...EARLY_PAD,
+      limper: vague("limper", "лимпер"),
+    }),
     full,
   );
 }
@@ -174,57 +253,115 @@ export function sceneFor(p: RangePreset): Scene {
     }
 
     case "3BETIP": {
-      // Ширина опена задана процентом, место соперника неизвестно.
-      const seats = [
-        vague("opener", `опен ${percentOf(p)}%`),
-        seat("hero", "Вы · в позиции", { hero: true }),
-      ];
-      return {
-        seats,
-        heroId: "hero",
-        steps: [{ seat: "opener", kind: "raise", label: "Рейз", amount: 2.5 }],
-      };
+      // Ширина опена задана процентом, место соперника неизвестно — но стол
+      // от этого не пустеет: двое сдали до опенера, блайнды сидят позади нас
+      // и ещё не ходили, потому что мы в позиции.
+      return fromSlots(
+        [
+          ...folded(1, 2),
+          {
+            seat: vague("opener", `опен ${percentOf(p)}%`),
+            step: { kind: "raise", label: "Рейз", amount: 2.5 },
+          },
+          { seat: seat("hero", "Вы · в позиции", { hero: true }) },
+          { seat: seat("SB"), blind: 0.5 },
+          { seat: seat("BB"), blind: 1 },
+        ],
+        "hero",
+      );
     }
 
     case "DEF3BETIP":
     case "DEF3BETOOP": {
-      const ip = g === "DEF3BETIP";
-      const sbVsBb = p.position.includes("SB vs BB");
-      const heroLabel = sbVsBb ? "SB (вы)" : ip ? "Вы · в позиции" : "Вы · вне позиции";
-      const opLabel = sbVsBb ? "BB · 3бет 18%" : `3бет ${percentOf(p)}%`;
-      // В позиции мы, если 3бет пришёл с блайнда — соперник ходит после нас
-      // только в порядке улицы, а на префлопе он всё равно уже ответил.
-      const seats = [
-        seat("hero", heroLabel, { hero: true, exact: sbVsBb }),
-        vague("villain", opLabel),
-      ];
-      return {
-        seats,
-        heroId: "hero",
-        steps: [
-          { seat: "hero", kind: "raise", label: "Опен", amount: sbVsBb ? 3 : 2.5 },
-          { seat: "villain", kind: "3bet", label: "3бет", amount: 11 },
-        ],
+      const pct = percentOf(p);
+      // Отдельный чарт «SB vs BB» — единственный на этих страницах, где места
+      // названы: там и стол собирается из настоящих позиций.
+      if (p.position.includes("SB vs BB")) {
+        return fromSlots(
+          [
+            ...folded(1, 4),
+            {
+              seat: seat("SB", "SB (вы)", { hero: true }),
+              blind: 0.5,
+              step: { kind: "raise", label: "Опен 3bb", amount: 3 },
+            },
+            {
+              seat: seat("BB", `BB · 3бет ${pct}%`),
+              blind: 1,
+              step: { kind: "3bet", label: "3бет", amount: 11 },
+            },
+          ],
+          "SB",
+        );
+      }
+      const hero = { seat: seat("hero", "", { hero: true, exact: false }) };
+      const villain = {
+        seat: vague("villain", `3бет ${pct}%`),
+        step: { kind: "3bet" as const, label: "3бет", amount: 11 },
       };
+      const open = { kind: "raise" as const, label: "Опен 2.5bb", amount: 2.5 };
+      if (g === "DEF3BETIP") {
+        // В позиции мы остаёмся, только если 3бет пришёл с блайнда: иначе
+        // 3бетор сидел бы после нас. Значит, второй блайнд уже сдал.
+        return fromSlots(
+          [
+            ...folded(1, 3),
+            { ...hero, seat: { ...hero.seat, label: "Вы · в позиции" }, step: open },
+            { seat: unknown(4), blind: 0.5, step: FOLD },
+            { ...villain, seat: vague("villain", `блайнд · 3бет ${pct}%`), blind: 1 },
+          ],
+          "hero",
+        );
+      }
+      // Вне позиции: 3бетор сидит после нас, а блайнды сдают уже после его
+      // 3бета — и это видно на столе, ход возвращается к нам последними.
+      return fromSlots(
+        [
+          ...folded(1, 2),
+          { ...hero, seat: { ...hero.seat, label: "Вы · вне позиции" }, step: open },
+          villain,
+          { seat: unknown(3), blind: 0.5, step: FOLD },
+          { seat: unknown(4), blind: 1, step: FOLD },
+        ],
+        "hero",
+      );
     }
 
     case "BLINDS4BET": {
       const sbVsBb = p.position.includes("BB vs SB");
       const { seat: op, size } = sbVsBb ? { seat: "SB", size: 3 } : openerOf(p);
       const hero = sbVsBb ? "BB" : "blind";
-      // Кто именно из блайндов 3бетнул, чарт не уточняет — кроме «BB vs SB».
-      const seats: SceneSeat[] = sbVsBb
-        ? [seat("SB", "SB"), seat("BB", "BB (вы)", { hero: true })]
-        : [seat(op, op), { ...vague("blind", "Вы · блайнд"), hero: true }];
-      return {
-        seats,
-        heroId: hero,
-        steps: [
-          { seat: op, kind: "raise", label: `Рейз ${size}bb`, amount: size },
-          { seat: hero, kind: "3bet", label: "3бет", amount: 12 },
-          { seat: op, kind: "4bet", label: "4бет", amount: 27 },
+      const raise = { kind: "raise" as const, label: `Рейз ${size}bb`, amount: size };
+      const threeBet = { kind: "3bet" as const, label: "3бет", amount: 12 };
+      const answer: SceneStep = { seat: op, kind: "4bet", label: "4бет", amount: 27 };
+
+      if (sbVsBb) {
+        return fromSlots(
+          [
+            ...folded(1, 4),
+            { seat: seat("SB"), blind: 0.5, step: raise },
+            { seat: seat("BB", "BB (вы)", { hero: true }), blind: 1, step: threeBet },
+          ],
+          "BB",
+          { extra: [answer] },
+        );
+      }
+      // Место опенера чарт называет, а вот с какого блайнда мы 3бетнули — нет.
+      // Поэтому места до опенера настоящие (они сдали), а блайнды подписаны
+      // блайндами: который из них наш, чарт не уточняет.
+      const before = CASH_SEATS.slice(0, CASH_SEATS.indexOf(op));
+      const between = CASH_SEATS.slice(CASH_SEATS.indexOf(op) + 1, CASH_SEATS.indexOf("SB"));
+      return fromSlots(
+        [
+          ...before.map((id) => ({ seat: seat(id), step: FOLD })),
+          { seat: seat(op), step: raise },
+          ...between.map((id) => ({ seat: seat(id), step: FOLD })),
+          { seat: unknown(1), blind: 0.5, step: FOLD },
+          { seat: { ...vague("blind", "Вы · блайнд"), hero: true }, blind: 1, step: threeBet },
         ],
-      };
+        hero,
+        { extra: [answer] },
+      );
     }
 
     case "MTTRFI": {
@@ -234,87 +371,140 @@ export function sceneFor(p: RangePreset): Scene {
 
     case "MTTISO": {
       if (p.position === "vs 2+") {
-        const seats = [
-          vague("limp1", "лимпер"),
-          vague("limp2", "лимпер"),
-          seat("hero", "Вы", { hero: true }),
-        ];
-        return {
-          seats,
-          heroId: "hero",
-          steps: [
-            { seat: "limp1", kind: "limp", label: "Лимп", amount: 1 },
-            { seat: "limp2", kind: "limp", label: "Лимп", amount: 1 },
+        // Чарт общий для всех позиций, поэтому не названо ни наше место, ни
+        // места лимперов — но за столом всё равно восемь человек.
+        const limp = { kind: "limp" as const, label: "Лимп", amount: 1 };
+        return fromSlots(
+          [
+            { seat: vague("limp1", "лимпер"), step: limp },
+            { seat: vague("limp2", "лимпер"), step: limp },
+            { seat: seat("hero", "Вы", { hero: true, exact: false }) },
+            ...waiting(3, 3),
+            { seat: seat("SB"), blind: 0.5 },
+            { seat: seat("BB"), blind: 1 },
           ],
-        };
+          "hero",
+        );
       }
-      // В MTT-паке первая ранняя позиция подписана просто «EP».
-      const order = p.position === "EP" ? ["EP", ...MTT_SEATS.slice(2)] : MTT_SEATS;
-      const b = isoRing(order, p.position);
+      const b = isoRing(mttOrder(p.position), p.position);
       return { seats: b.seats, heroId: p.position, steps: b.steps };
     }
 
     case "MTTVSRFI": {
       // Место героя чарт задаёт группой («Ранние»), кроме отдельного чарта SB.
-      const sb = p.position === "SB";
-      const heroLabel = sb ? "SB (вы)" : `Вы · ${p.position.toLowerCase()}`;
-      const seats: SceneSeat[] = [
-        vague("opener", "опенер"),
-        { ...seat("hero", heroLabel, { hero: true }), exact: sb },
-      ];
-      return {
-        seats,
-        heroId: "hero",
-        steps: [{ seat: "opener", kind: "raise", label: "Рейз 2bb", amount: 2 }],
-        stack: "40bb+",
-      };
+      const open = { kind: "raise" as const, label: "Рейз 2bb", amount: 2 };
+      const opener = { seat: vague("opener", "опенер"), step: open };
+      if (p.position === "SB") {
+        return fromSlots(
+          [
+            ...folded(1, 5),
+            opener,
+            { seat: seat("SB", "SB (вы)", { hero: true }), blind: 0.5 },
+            { seat: seat("BB"), blind: 1 },
+          ],
+          "SB",
+          { stack: "40bb+" },
+        );
+      }
+      return fromSlots(
+        [
+          ...folded(1, 2),
+          opener,
+          { seat: { ...vague("hero", `Вы · ${p.position.toLowerCase()}`), hero: true } },
+          ...waiting(3, 2),
+          { seat: seat("SB"), blind: 0.5 },
+          { seat: seat("BB"), blind: 1 },
+        ],
+        "hero",
+        { stack: "40bb+" },
+      );
     }
 
     case "MTTDEF3BET": {
-      const seats = [seat(p.position, p.position, { hero: true }), vague("villain", "3бет")];
-      return {
-        seats,
-        heroId: p.position,
-        steps: [
-          { seat: p.position, kind: "raise", label: "Опен 2bb", amount: 2 },
-          { seat: "villain", kind: "3bet", label: "3бет 5-7bb", amount: 6 },
+      // Наше место чарт называет, значит места до нас тоже известны — они
+      // сдали. А вот кто из оставшихся 3бетнул, чарт не говорит, поэтому
+      // места после нас безымянные: назвать их значило бы решить за чарт,
+      // с какого стула пришёл 3бет.
+      const before = MTT_SEATS.slice(0, MTT_SEATS.indexOf(p.position));
+      const after = MTT_SEATS.length - before.length - 2;
+      return fromSlots(
+        [
+          ...before.map((id) => ({ seat: seat(id), step: FOLD })),
+          {
+            seat: seat(p.position, p.position, { hero: true }),
+            step: { kind: "raise", label: "Опен 2bb", amount: 2 },
+          },
+          ...folded(1, after),
+          {
+            seat: vague("villain", "3бет"),
+            step: { kind: "3bet", label: "3бет 5-7bb", amount: 6 },
+          },
         ],
-        stack: "40bb+",
-      };
+        p.position,
+        { stack: "40bb+" },
+      );
     }
 
     case "MTTBBDEF": {
+      // Опенер задан группой мест («ранние»), поэтому и он, и те, кто сдал
+      // после него, остаются безымянными: конкретный стул чарт не называет.
       const who = p.position.replace(/^vs\s+/, "");
-      const seats = [vague("opener", who), seat("BB", "BB (вы)", { hero: true })];
-      return {
-        seats,
-        heroId: "BB",
-        steps: [
-          { seat: "BB", kind: "blind", label: "BB", amount: 1 },
-          { seat: "opener", kind: "raise", label: "Рейз 2-2.2bb", amount: 2.2 },
+      return fromSlots(
+        [
+          ...folded(1, 2),
+          {
+            seat: vague("opener", who),
+            step: { kind: "raise", label: "Рейз 2-2.2bb", amount: 2.2 },
+          },
+          ...folded(3, 3),
+          { seat: unknown(6), blind: 0.5, step: FOLD },
+          { seat: seat("BB", "BB (вы)", { hero: true }), blind: 1 },
         ],
-      };
+        "BB",
+      );
     }
 
     case "MTTPUSH": {
       const { seat: hero, stack } = seatAndStack(p.position);
-      const order = MTT_SEATS.includes(hero) ? MTT_SEATS : [hero, ...MTT_SEATS.slice(2)];
-      const b = withBlinds(ring(order, hero), order);
+      const order = mttOrder(hero);
+      const b = withBlinds(ring(order, hero, undefined, EARLY_PAD), order);
       return { seats: b.seats, heroId: hero, steps: b.steps, stack };
     }
 
     case "MTT3BETPUSH": {
       const [heroPart, openerPart] = p.position.split(" vs ");
-      const seats: SceneSeat[] = [
-        vague("opener", `опенер · ${openerPart}`),
-        { ...vague("hero", `Вы · ${heroPart.toLowerCase()}`), hero: true },
-      ];
-      return {
-        seats,
-        heroId: "hero",
-        steps: [{ seat: "opener", kind: "raise", label: "Рейз 2bb", amount: 2 }],
-        stack: "16-22bb",
+      const opener = {
+        seat: vague("opener", `опенер · ${openerPart}`),
+        step: { kind: "raise" as const, label: "Рейз 2bb", amount: 2 },
       };
+      const hero = { ...vague("hero", `Вы · ${heroPart.toLowerCase()}`), hero: true };
+      // «Блайнды vs …» — мы на блайнде, значит сидим последними и второй
+      // блайнд к нашему решению уже сдал.
+      if (heroPart === "Блайнды") {
+        return fromSlots(
+          [
+            ...folded(1, 4),
+            opener,
+            { seat: unknown(5), step: FOLD },
+            { seat: unknown(6), blind: 0.5, step: FOLD },
+            { seat: hero, blind: 1 },
+          ],
+          "hero",
+          { stack: "16-22bb" },
+        );
+      }
+      return fromSlots(
+        [
+          ...folded(1, 2),
+          opener,
+          { seat: hero },
+          ...waiting(3, 2),
+          { seat: seat("SB"), blind: 0.5 },
+          { seat: seat("BB"), blind: 1 },
+        ],
+        "hero",
+        { stack: "16-22bb" },
+      );
     }
   }
 }
