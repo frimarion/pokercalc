@@ -180,9 +180,23 @@ function write(rel: string, body: string) {
   console.log(`  ${rel} — ${(body.length / 1024).toFixed(1)} КБ`);
 }
 
+// Чарты отдаются как СКРИПТ, а не как JSON под fetch, и это не стилистика.
+// Приложение открывается с doylepoker.ru/app/, а <base href> уводит все
+// относительные пути на timer.doylepoker.ru — то есть любой fetch оттуда
+// межсайтовый и требует Access-Control-Allow-Origin, которого статика по FTP
+// не отдаёт. Теги <script> под CORS не подпадают и работают с обоих хостов
+// одинаково; так же в проекте грузится и всё остальное (lib/*.js).
+const payload = JSON.stringify({
+  generatedAt: new Date().toISOString().slice(0, 10),
+  groups,
+  charts,
+});
+
 write(
-  "assets/academy/mtt-charts.json",
-  JSON.stringify({ generatedAt: new Date().toISOString().slice(0, 10), groups, charts }),
+  "assets/academy/mtt-charts.js",
+  `// Doyle Academy — чарты MTT. СГЕНЕРИРОВАНО tools/export_academy.ts, руками не править.\n` +
+    `// Файл, а не JSON: fetch отсюда межсайтовый (см. комментарий в экспортёре).\n` +
+    `window.ACADEMY_CHARTS = ${payload};\n`,
 );
 
 // SQL-сид: сервер хранит только то, что нужно для проверки ответа —
