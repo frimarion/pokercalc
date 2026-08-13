@@ -206,12 +206,12 @@ function finish(
   counters: Record<StatKey, Counter>,
   agg: { a: number; p: number },
   net: number,
+  netBb: number,
 ): Stats {
-  const bb = hands[0]?.bb ?? 1;
   return {
     hands: hands.length,
     net,
-    bbPer100: hands.length === 0 ? 0 : (net / bb / hands.length) * 100,
+    bbPer100: hands.length === 0 ? 0 : (netBb / hands.length) * 100,
     counters,
     af: agg.p === 0 ? (agg.a > 0 ? Infinity : 0) : agg.a / agg.p,
     aggressive: agg.a,
@@ -223,13 +223,16 @@ export function computeStats(hands: Hand[]): Stats {
   const counters = emptyCounters();
   const agg = { a: 0, p: 0 };
   let net = 0;
+  let netBb = 0;
   for (const h of hands) {
     const hero = heroPlayer(h);
     if (!hero) continue;
-    net += hero.collected - hero.contributed;
+    const handNet = hero.collected - hero.contributed;
+    net += handNet;
+    netBb += handNet / h.bb;
     tally(h, counters, agg);
   }
-  return finish(hands.filter((h) => h.hero), counters, agg, net);
+  return finish(hands.filter((h) => h.hero), counters, agg, net, netBb);
 }
 
 export interface PositionStats {

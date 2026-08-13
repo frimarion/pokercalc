@@ -17,6 +17,17 @@ interface Point {
   ev: number;
 }
 
+function luckInBb(hands: Hand[]): number {
+  let luck = 0;
+  for (const h of hands) {
+    const hero = h.players.find((p) => p.name === h.hero);
+    if (!hero) continue;
+    const net = hero.collected - hero.contributed;
+    luck += (net - (cachedAllInSpot(h)?.ev ?? net)) / h.bb;
+  }
+  return luck;
+}
+
 /** Накопленный итог героя в bb: фактический и EV-скорректированный. */
 function buildCurve(hands: Hand[]): Point[] {
   const out: Point[] = [];
@@ -78,7 +89,7 @@ export function HandsEv({ hands }: { hands: Hand[] }) {
   }
 
   const luck = ev.actual - ev.ev;
-  const bb = hands[0]?.bb ?? 5;
+  const luckBb = luckInBb(hands);
 
   return (
     <div className="space-y-5">
@@ -92,7 +103,7 @@ export function HandsEv({ hands }: { hands: Hand[] }) {
           </span>
           <span className={`ml-auto font-semibold ${luck >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
             {luck >= 0 ? "Выше EV на " : "Ниже EV на "}
-            {money(Math.abs(luck))} ({(Math.abs(luck) / bb).toFixed(1)} bb)
+            {money(Math.abs(luck))} ({Math.abs(luckBb).toFixed(1)} bb)
           </span>
         </div>
         <Chart points={points} />

@@ -201,33 +201,36 @@ export interface EvReport {
 export function analyzeEv(hands: Hand[]): EvReport {
   let actual = 0;
   let ev = 0;
+  let actualBb = 0;
+  let evBb = 0;
   let counted = 0;
   let skipped = 0;
   const spots: AllInSpot[] = [];
-  const bb = hands[0]?.bb ?? 1;
-
   for (const h of hands) {
     const hero = heroPlayer(h);
     if (!hero) continue;
     counted++;
     const net = hero.collected - hero.contributed;
     actual += net;
+    actualBb += net / h.bb;
     const cached = cachedAllInSpot(h);
     if (cached) {
       spots.push(cached);
       ev += cached.ev;
+      evBb += cached.ev / h.bb;
     } else {
       ev += net;
+      evBb += net / h.bb;
       if (allInKind(h) === "unsupported") skipped++;
     }
   }
 
-  const per100 = (cents: number) => (counted === 0 ? 0 : (cents / bb / counted) * 100);
+  const per100 = (bigBlinds: number) => (counted === 0 ? 0 : (bigBlinds / counted) * 100);
   return {
     actual,
     ev,
-    actualBb100: per100(actual),
-    evBb100: per100(ev),
+    actualBb100: per100(actualBb),
+    evBb100: per100(evBb),
     spots,
     skipped,
   };

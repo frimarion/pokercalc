@@ -202,4 +202,30 @@ describe("analyzeEv", () => {
     expect(r.ev).toBeGreaterThan(150 + 1000);
     expect(r.evBb100).toBeCloseTo((r.ev / 100 / 2) * 100, 5);
   });
+
+  it("EV-винрейт нормализует каждую раздачу по её собственному лимиту", () => {
+    const nl100 = makeHand({
+      id: "nl100",
+      hero: "BU",
+      preflop: [...foldsBefore(ALL, "BU"), { who: "BU", type: "raise", to: 3 },
+        { who: "SB", type: "fold" }, { who: "BB", type: "fold" }],
+    });
+    const nl200 = structuredClone(nl100);
+    nl200.id = "nl200";
+    nl200.sb *= 2;
+    nl200.bb *= 2;
+    for (const p of nl200.players) {
+      p.stack *= 2;
+      p.contributed *= 2;
+      p.collected *= 2;
+    }
+    for (const a of nl200.actions) {
+      a.amount *= 2;
+      if (a.to !== undefined) a.to *= 2;
+    }
+
+    const r = analyzeEv([nl100, nl200]);
+    expect(r.actualBb100).toBeCloseTo(150, 5);
+    expect(r.evBb100).toBeCloseTo(150, 5);
+  });
 });
