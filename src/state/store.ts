@@ -115,7 +115,10 @@ export const useStore = create<AppState>((set, get) => ({
   picker: null,
   presetView: { hero: null, villain: null },
   presetLegend: { hero: null, villain: null },
-  presetColorMode: false,
+  // Включено по умолчанию: раз дефолтная матрица одноцветная, цвет теперь
+  // свободен под распределение чарта — применил пресет и сразу видишь его
+  // красный/жёлтый/зелёный, как на картинке оригинала.
+  presetColorMode: true,
 
   setActiveSide: (s) => set({ activeSide: s }),
   setBrush: (w) => set({ brushWeight: w }),
@@ -171,7 +174,10 @@ export const useStore = create<AppState>((set, get) => ({
 
     for (const action of actions) {
       const color = action.color ?? defaultActionColor(action.kind);
-      const partialColor = yellowPartial ? "yellow" : color;
+      // Жёлтый «ситуативно» — краска самого чарта, а не раздел ячейки, но
+      // только там, где действие не назвало цвет само: у RFI UTG зелёное
+      // «фиш на блайндах» тоже частичное и обязано остаться зелёным.
+      const partialColor = yellowPartial && !action.color ? "yellow" : color;
       for (const label of action.always) {
         r.setHand(label, 1);
         addSegment(label, color, 1);

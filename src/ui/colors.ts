@@ -4,19 +4,24 @@ import { ActionColor, ColorSegment } from "../presets";
 
 type RGB = [number, number, number];
 
-// Акцент выбранной руки — свой на каждый тип, чтобы три зоны матрицы
-// (диагональ / верхний / нижний треугольник) читались с одного взгляда.
+// Акцент выбранной руки — один нейтральный цвет на все три зоны матрицы.
+// Раньше тип руки задавал оттенок (зелёный/синий/оранжевый), но тогда цвет
+// нёс сразу два смысла; теперь оттенок свободен под раскраску по действиям
+// чарта, а дефолтная заливка говорит только о весе.
+const NEUTRAL: RGB = [148, 163, 175];
+const NEUTRAL_BASE: RGB = [26, 28, 30];
+
 const ACCENT: Record<HandType, RGB> = {
-  pair: [52, 199, 123], // зелёный
-  suited: [59, 130, 246], // синий
-  offsuit: [224, 138, 60], // оранжевый
+  pair: NEUTRAL,
+  suited: NEUTRAL,
+  offsuit: NEUTRAL,
 };
 
-// Тёмная база невыбранной ячейки — тот же оттенок, но приглушённый.
+// Тёмная база невыбранной ячейки.
 const BASE: Record<HandType, RGB> = {
-  pair: [20, 34, 28],
-  suited: [17, 27, 40],
-  offsuit: [33, 26, 18],
+  pair: NEUTRAL_BASE,
+  suited: NEUTRAL_BASE,
+  offsuit: NEUTRAL_BASE,
 };
 
 const css = ([r, g, b]: RGB) => `rgb(${r}, ${g}, ${b})`;

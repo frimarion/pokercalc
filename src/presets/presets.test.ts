@@ -336,17 +336,25 @@ describe("RFI", () => {
     }
   });
 
-  it("проценты совпадают с подписями в чартах", () => {
-    const expected: Record<string, number> = {
-      "rfi-utg": 14,
-      "rfi-mp": 16,
-      "rfi-co": 26,
-      "rfi-bu": 42,
-      "rfi-sb": 44,
+  it("проценты попадают в подписанные на чартах полосы", () => {
+    // Чарты трёхцветные, и подпись у них — не точка, а полоса («MP 14-22%»,
+    // «CO 23-29%», «BU 37-45», «SB 45 и выше»). У EP подписи нет, поэтому ему
+    // полоса от прежнего чарта Green Charts (14%).
+    const expected: Record<string, [number, number]> = {
+      "rfi-utg": [13, 15],
+      "rfi-mp": [14, 22],
+      "rfi-co": [23, 29],
+      "rfi-bu": [37, 45],
+      // На SB зелёного («фиш на блайндах») больше, чем всего остального:
+      // без него красный+жёлтый дают 46.9% — те самые «45 и выше», — а с ним
+      // диапазон разрастается до 59%.
+      "rfi-sb": [45, 60],
     };
     for (const p of RFI_PRESETS) {
       const v = pct(p);
-      expect(Math.abs(v - expected[p.id]), `${p.id}: ${v.toFixed(1)}%`).toBeLessThan(1);
+      const [lo, hi] = expected[p.id];
+      expect(v, `${p.id}: ${v.toFixed(1)}%`).toBeGreaterThanOrEqual(lo);
+      expect(v, `${p.id}: ${v.toFixed(1)}%`).toBeLessThanOrEqual(hi);
     }
   });
 });

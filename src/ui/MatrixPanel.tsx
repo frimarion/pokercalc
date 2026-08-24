@@ -1,17 +1,10 @@
 import { useMemo } from "react";
 import { useStore, blockerMask, Side } from "../state/store";
-import { HandType } from "../engine/combos";
 import { HandMatrix } from "./HandMatrix";
 import { ActionTree } from "./ActionTree";
 import { handTypeColor, actionColorCss } from "./colors";
 
 const BRUSHES = [0.25, 0.5, 0.75, 1];
-
-const LEGEND: { type: HandType; label: string }[] = [
-  { type: "pair", label: "пары" },
-  { type: "suited", label: "suited" },
-  { type: "offsuit", label: "offsuit" },
-];
 
 const SIDE_META: Record<Side, { label: string; active: string }> = {
   hero: { label: "Hero", active: "bg-emerald-600 text-white" },
@@ -78,15 +71,15 @@ export function MatrixPanel() {
                 </span>
               ))
             ) : (
-              LEGEND.map(({ type, label }) => (
-                <span key={type} className="flex items-center gap-1 text-[10px] text-neutral-500">
-                  <i
-                    className="inline-block h-2.5 w-2.5 rounded-[2px]"
-                    style={{ background: handTypeColor(type) }}
-                  />
-                  {label}
-                </span>
-              ))
+              // Дефолтная матрица одноцветная: тип руки цветом больше не
+              // кодируется, заливка означает только вес.
+              <span className="flex items-center gap-1 text-[10px] text-neutral-500">
+                <i
+                  className="inline-block h-2.5 w-2.5 rounded-[2px]"
+                  style={{ background: handTypeColor("pair") }}
+                />
+                в диапазоне — заливка по весу
+              </span>
             )}
           </div>
         </div>
