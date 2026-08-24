@@ -67,10 +67,11 @@ export const THREEBET_IP_PRESETS: RangePreset[] = [
         label: "3бет",
         always: [
         "AA", "AKs", "AKo", "AQs", "AQo", "AJs", "ATs", "A5s", "A4s", "KK",
-        "KQs", "KJs", "KTs", "QQ", "QJs", "QTs", "JJ", "JTs", "TT", "99", "88"
+        "KQs", "KJs", "KTs", "QQ", "QJs", "QTs", "JJ", "JTs", "TT", "99", "88",
+        "A9s"
         ],
         situational: [
-        "AJo", "A9s", "KQo", "K9s", "Q9s", "J9s", "T9s", "98s", "87s", "77",
+        "AJo", "KQo", "K9s", "Q9s", "J9s", "T9s", "98s", "87s", "77",
         "76s"
         ],
       },

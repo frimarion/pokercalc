@@ -194,27 +194,24 @@ export const BBDEF_PRESETS: RangePreset[] = [
         kind: "raise",
         label: "3бет",
         always: [
-        "AA", "AKo", "AKs", "AQo", "AQs", "AJs", "ATs", "A5s", "A4s", "KK",
-        "KQs", "KJs", "KTs", "QQ", "QJs", "QTs", "JJ", "JTs", "TT", "T9s",
-        "99", "98s"
+        "AA", "AKo", "AKs", "AQs", "AJs", "ATs", "KK", "KQs", "KJs", "KTs",
+        "QQ", "QJs", "QTs", "JJ", "JTs", "TT", "99"
         ],
         situational: [
-        "A9s", "A3s", "K9s", "Q9s", "J9s", "J8s", "T8s", "88", "87s", "77",
-        "76s"
+        "A5s", "A4s", "T9s", "88", "77", "AQo", "KQo", "AJo", "KJo", "ATo"
         ],
       },
       {
         kind: "call",
         label: "колл",
         always: [
-        "AJo", "ATo", "A9o", "A8o", "A8s", "A7o", "A7s", "A6s", "A5o", "A2s",
-        "KQo", "KJo", "KTo", "K9o", "K8s", "K7s", "K6s", "K5s", "K4s", "QJo",
-        "QTo", "Q8s", "Q7s", "Q6s", "JTo", "J7s", "T9o", "T7s", "97s", "86s",
-        "75s", "66", "65s", "64s", "55", "54s", "44", "33", "22"
+        "A9s", "A8s", "A7s", "A6s", "A3s", "A2s", "K9s", "K8s", "K7s", "K6s",
+        "K5s", "K4s", "Q9s", "Q8s", "J9s", "98s", "97s", "87s", "76s", "65s",
+        "54s", "QJo", "KTo", "QTo", "JTo", "A9o", "66", "55", "44", "33", "22"
         ],
         situational: [
-        "A9s", "A3s", "K9s", "Q9s", "J9s", "J8s", "T8s", "88", "87s", "77",
-        "76s"
+        "A5s", "A4s", "T9s", "88", "77", "AQo", "KQo", "AJo", "KJo", "ATo",
+        "J8s", "T8s"
         ],
       },
     ],

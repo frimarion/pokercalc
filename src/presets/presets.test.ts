@@ -399,15 +399,22 @@ describe("BB — защита", () => {
     }
   });
 
-  it("сплит-руки входят в оба действия и не дублируют «всегда»", () => {
+  it("рука не защищается чаще, чем 100% времени", () => {
+    // Раньше здесь стоял более жёсткий инвариант: частичные списки 3бета и
+    // колла — это одни и те же сплит-ячейки (3бет половину, колл половину).
+    // Он был верен только для чартов Green Charts. В новом источнике рука
+    // может миксовать колл с ФОЛДОМ (у vs BU 3bb так играются J8s и T8s),
+    // и тогда она частичная только в колле. Остаётся то, что верно всегда:
+    // сумма частот двух действий не превышает единицы.
     for (const p of BBDEF_PRESETS) {
-      const raise = p.actions.find((a) => a.kind === "raise")!;
-      const call = p.actions.find((a) => a.kind === "call")!;
-      // Частичные списки обоих действий — это одни и те же сплит-ячейки.
-      expect(new Set(raise.situational), p.id).toEqual(new Set(call.situational));
-      for (const h of raise.situational) {
-        expect(call.always, `${p.id}: ${h} и в сплите, и в колле-всегда`).not.toContain(h);
-        expect(raise.always, `${p.id}: ${h} и в сплите, и в 3бете-всегда`).not.toContain(h);
+      for (const cell of GRID.flat()) {
+        const w = handWeights(p, cell.label);
+        expect(w.raise + w.call, `${p.id}: ${cell.label}`).toBeLessThanOrEqual(1.001);
+      }
+      for (const a of p.actions) {
+        for (const h of a.situational) {
+          expect(a.always, `${p.id}: ${h} и в сплите, и во «всегда»`).not.toContain(h);
+        }
       }
     }
   });
