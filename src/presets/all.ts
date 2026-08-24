@@ -10,6 +10,7 @@ import { BBDEF_PRESETS } from "./bbDefense";
 import { THREEBET_IP_PRESETS } from "./threeBetIP";
 import { DEF3BETIP_PRESETS, DEF3BETOOP_PRESETS } from "./defenseVs3bet";
 import { BLINDS4BET_PRESETS } from "./blinds4bet";
+import { DEF4BETIP_PRESETS } from "./def4betIP";
 import { MTT_RFI_PRESETS } from "./mtt/rfi";
 import { MTT_ISO_PRESETS } from "./mtt/iso";
 import { MTT_VS_RFI_PRESETS } from "./mtt/vsRfi";
@@ -27,6 +28,7 @@ export const ALL_PRESETS: RangePreset[] = [
   ...DEF3BETIP_PRESETS,
   ...DEF3BETOOP_PRESETS,
   ...BLINDS4BET_PRESETS,
+  ...DEF4BETIP_PRESETS,
   ...MTT_RFI_PRESETS,
   ...MTT_ISO_PRESETS,
   ...MTT_VS_RFI_PRESETS,

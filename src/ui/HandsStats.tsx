@@ -44,7 +44,7 @@ export function HandsStats({ hands }: { hands: Hand[] }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Tile label="Раздач" value={stats.hands.toLocaleString("ru")} hint={`${byPos.length} позиций`} />
         <Tile
           label="Винрейт"
@@ -64,7 +64,18 @@ export function HandsStats({ hands }: { hands: Hand[] }) {
           hint={`${signed(stats.bbPer100 - ev.evBb100)} bb/100 к дистанции`}
           tone={luck >= 0 ? "text-emerald-400" : "text-rose-400"}
         />
+        <Tile
+          label="Уплачено рейка"
+          value={money(stats.rake)}
+          hint={`${stats.rakeBbPer100.toFixed(2)} bb/100 · до рейка ${signed(stats.bbPer100 + stats.rakeBbPer100)} bb/100`}
+          tone="text-amber-300"
+        />
       </div>
+
+      <p className="text-[11px] text-neutral-600">
+        Рейк — сумма, удержанная из выигранных вами банков; при делёжке учитывается ваша доля.
+        Винрейт до рейка нужен для сравнения с PokerCraft, который рейк не показывает.
+      </p>
 
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">

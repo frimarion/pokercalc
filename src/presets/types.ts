@@ -10,6 +10,7 @@ export type PresetGroup =
   | "DEF3BETIP"
   | "DEF3BETOOP"
   | "BLINDS4BET"
+  | "DEF4BETIP"
   | "MTTRFI"
   | "MTTISO"
   | "MTTVSRFI"
@@ -91,6 +92,7 @@ export const GROUP_LABELS: Record<PresetGroup, string> = {
   DEF3BETIP: "Защита на 3бет — в позиции",
   DEF3BETOOP: "Защита на 3бет — без позиции",
   BLINDS4BET: "Блайнды — защита от 4бета",
+  DEF4BETIP: "Колл 4бета — после 3бета в позиции",
   MTTRFI: "MTT · RFI — открытие",
   MTTISO: "MTT · Изолейт после лимпа",
   MTTVSRFI: "MTT · Против опена — 3бет и колд-колл",

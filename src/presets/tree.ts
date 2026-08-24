@@ -146,8 +146,21 @@ function vs4betNode(presetId: string): TreeNode {
   };
 }
 
+/**
+ * Шаг «3бетор в позиции отвечает на 4бет». Пуша в этих чартах нет — защита
+ * там одна, колл, поэтому и опция одна (фолд показан отдельной строкой).
+ */
+function ip4betNode(presetId: string): TreeNode {
+  return {
+    title: "Ответ 3бетора на 4бет",
+    note: "в чарте только колл, остального нет",
+    showFold: true,
+    options: [{ key: "call", label: "Колл 4бета", presetId, actionKind: "call" }],
+  };
+}
+
 /** Финальный шаг: как опенер разыгрывает выбранный чарт защиты. */
-function actionsNode(presetId: string, ip: boolean, vs4betId?: string): TreeNode {
+function actionsNode(presetId: string, ip: boolean, vs4bet?: TreeNode): TreeNode {
   return {
     title: "Действие",
     note: `4бет = сайзинг 3бета × ${ip ? "2.2" : "2.5"}`,
@@ -159,7 +172,7 @@ function actionsNode(presetId: string, ip: boolean, vs4betId?: string): TreeNode
         label: "4бет",
         presetId,
         actionKind: "raise",
-        next: vs4betId ? vs4betNode(vs4betId) : undefined,
+        next: vs4bet,
       },
     ],
   };
@@ -174,8 +187,8 @@ function defenseNode(
   ip: boolean,
   raiser: string,
   raiserWidth: number,
-  /** Задан, только если 3бетнул блайнд — у него есть чарт защиты от 4бета. */
-  vs4betId?: string,
+  /** Шаг «3бетор отвечает на 4бет», если для этой линии есть чарт. */
+  vs4bet?: TreeNode,
 ): TreeNode {
   const pcts = ip ? DEF_IP_PCTS : DEF_OOP_PCTS;
   const prefix = ip ? "def3bet-ip-" : "def3bet-oop-";
@@ -187,7 +200,7 @@ function defenseNode(
       key: `p${n}`,
       label: `vs 3бет ${n}%`,
       presetId: `${prefix}${n}`,
-      next: actionsNode(`${prefix}${n}`, ip, vs4betId),
+      next: actionsNode(`${prefix}${n}`, ip, vs4bet),
     })),
   };
 }
@@ -212,7 +225,13 @@ function respondersNode(op: Opener): TreeNode {
           label: `vs опен ${n}%`,
           presetId: `3betip-${n}`,
           // 3бетор сидит ближе к баттону → опенер остаётся вне позиции.
-          next: defenseNode(op, false, "Соперник", widthOf(`3betip-${n}`)),
+          next: defenseNode(
+            op,
+            false,
+            "Соперник",
+            widthOf(`3betip-${n}`),
+            ip4betNode(`def4bet-ip-${n}`),
+          ),
         })),
       },
     });
@@ -225,19 +244,35 @@ function respondersNode(op: Opener): TreeNode {
       note: `до ${SB_3BET_SIZE[op.key]}`,
       presetId: op.sb,
       // SB играет постфлоп первым → опенер в позиции.
-      next: defenseNode(op, true, "SB", widthOf(op.sb), BLINDS_VS_4BET[op.key]),
+      next: defenseNode(op, true, "SB", widthOf(op.sb), vs4betNode(BLINDS_VS_4BET[op.key])),
     });
   }
 
   // BB против опена SB сам оказывается в позиции постфлоп.
   const openerIpVsBb = op.seat !== "SB";
+  // Вся защита BB одной матрицей: без фильтра действия применяются оба, и
+  // раскраска по пресету разводит их цветом — 3бет красным, колл зелёным,
+  // а составная ячейка заливается половинками обоих. Отдельные ветки ниже
+  // остаются: по ним идёт продолжение дерева (ответ опенера на 3бет).
+  options.push({
+    key: "bbdef",
+    label: "BB — защита",
+    note: "3бет и колл одной матрицей",
+    presetId: op.bb,
+  });
   options.push({
     key: "bb3bet",
     label: "BB — 3бет",
     note: `до ${BB_3BET_SIZE[op.key]}`,
     presetId: op.bb,
     actionKind: "raise",
-    next: defenseNode(op, openerIpVsBb, "BB", widthOf(op.bb, "raise"), BLINDS_VS_4BET[op.key]),
+    next: defenseNode(
+      op,
+      openerIpVsBb,
+      "BB",
+      widthOf(op.bb, "raise"),
+      vs4betNode(BLINDS_VS_4BET[op.key]),
+    ),
   });
   options.push({
     key: "bbcall",

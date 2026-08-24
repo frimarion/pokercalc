@@ -254,6 +254,8 @@ function situationOf(p: RangePreset): string {
       return p.position.includes("BB vs SB")
         ? "Вы 3бетнули с BB против опена SB, и SB ответил 4бетом."
         : `Вы 3бетнули с блайнда, ${seat} ответил 4бетом${size}.`;
+    case "DEF4BETIP":
+      return `Вы 3бетнули в позиции на опен ${percent}%, и опенер ответил 4бетом.`;
     case "DEF3BETIP":
       return `Вы открыли рейзом, блайнд 3бетнул. Его 3бет — ${percent}%, вы в позиции.`;
     case "DEF3BETOOP": {
@@ -270,6 +272,7 @@ function situationOf(p: RangePreset): string {
  * самого чарта.
  */
 function callLabel(p: RangePreset): string {
+  if (p.group === "DEF4BETIP") return "Колл 4бета";
   if (p.group === "MTTISO") return "Оверлимп";
   if (p.group === "ISO") {
     const call = p.actions.find((a) => a.kind === "call");
@@ -374,6 +377,7 @@ export const TRAINER_SECTIONS: TrainerSection[] = [
       "DEF3BETIP",
       "DEF3BETOOP",
       "BLINDS4BET",
+      "DEF4BETIP",
     ],
   },
   {

@@ -53,6 +53,10 @@ export interface Stats {
   net: number;
   /** Выигрыш в больших блайндах на 100 раздач. */
   bbPer100: number;
+  /** Рейк, удержанный из причитающейся герою части банков, центы. */
+  rake: number;
+  /** Влияние удержанного рейка на винрейт в больших блайндах на 100 раздач. */
+  rakeBbPer100: number;
   counters: Record<StatKey, Counter>;
   /** Постфлоп-агрессия: (ставки + рейзы) / коллы. */
   af: number;
@@ -207,11 +211,15 @@ function finish(
   agg: { a: number; p: number },
   net: number,
   netBb: number,
+  rake: number,
+  rakeBb: number,
 ): Stats {
   return {
     hands: hands.length,
     net,
     bbPer100: hands.length === 0 ? 0 : (netBb / hands.length) * 100,
+    rake,
+    rakeBbPer100: hands.length === 0 ? 0 : (rakeBb / hands.length) * 100,
     counters,
     af: agg.p === 0 ? (agg.a > 0 ? Infinity : 0) : agg.a / agg.p,
     aggressive: agg.a,
@@ -224,15 +232,24 @@ export function computeStats(hands: Hand[]): Stats {
   const agg = { a: 0, p: 0 };
   let net = 0;
   let netBb = 0;
+  let rake = 0;
+  let rakeBb = 0;
   for (const h of hands) {
     const hero = heroPlayer(h);
     if (!hero) continue;
     const handNet = hero.collected - hero.contributed;
     net += handNet;
     netBb += handNet / h.bb;
+    const paidOut = h.players.reduce((sum, p) => sum + p.collected, 0);
+    // GG указывает рейк всего банка. Для героя учитываем ту его долю, которая
+    // была удержана из выплаты: весь рейк при единственном победителе и
+    // пропорциональную часть при разделённом банке.
+    const heroRake = paidOut === 0 ? 0 : h.rake * (hero.collected / paidOut);
+    rake += heroRake;
+    rakeBb += heroRake / h.bb;
     tally(h, counters, agg);
   }
-  return finish(hands.filter((h) => h.hero), counters, agg, net, netBb);
+  return finish(hands.filter((h) => h.hero), counters, agg, net, netBb, rake, rakeBb);
 }
 
 export interface PositionStats {

@@ -255,6 +255,36 @@ describe("сводка", () => {
     expect(computeStats([nl100, nl200]).bbPer100).toBeCloseTo(150, 5);
   });
 
+  it("считает рейк из выплаты героя и переводит его в bb/100", () => {
+    const won = makeHand({
+      hero: "BU",
+      rake: 0.5,
+      preflop: [...foldsBefore(ALL, "BU"), { who: "BU", type: "raise", to: 3 },
+        { who: "SB", type: "fold" }, { who: "BB", type: "call", bb: 2 }],
+    });
+    const lost = makeHand({
+      hero: "BU",
+      rake: 0.5,
+      preflop: [...foldsBefore(ALL, "BU"), { who: "BU", type: "raise", to: 3 },
+        { who: "SB", type: "fold" }, { who: "BB", type: "call", bb: 2 }],
+      collected: { BB: 6 },
+    });
+
+    const s = computeStats([won, lost]);
+    expect(s.rake).toBe(50);
+    expect(s.rakeBbPer100).toBeCloseTo(25, 5);
+  });
+
+  it("при делёжке относит герою пропорциональную часть рейка", () => {
+    const split = makeHand({
+      hero: "BU",
+      rake: 1,
+      collected: { BU: 3, BB: 6 },
+    });
+
+    expect(computeStats([split]).rake).toBeCloseTo(100 / 3, 5);
+  });
+
   it("разбивка по позициям не смешивает места", () => {
     const hands = [
       makeHand({ id: "a", hero: "BU", preflop: [...foldsBefore(ALL, "BU"), { who: "BU", type: "raise", to: 3 },

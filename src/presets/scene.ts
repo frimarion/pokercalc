@@ -373,6 +373,40 @@ export function sceneFor(p: RangePreset): Scene {
       );
     }
 
+    case "DEF4BETIP": {
+      // Тот же стол, что и в 3BETIP, только раздача ушла на шаг дальше: мы уже
+      // 3бетнули в позиции, блайнды позади нас сдали, и опенер ответил 4бетом.
+      const open = 2.5;
+      const my3bet = threeBetSize(open, true);
+      const their4bet = fourBetSize(my3bet);
+      return fromSlots(
+        [
+          ...folded(1, 2),
+          {
+            seat: vague("opener", `опен ${percentOf(p)}%`),
+            step: { kind: "raise", label: `Рейз ${open}bb`, amount: open },
+          },
+          {
+            seat: seat("hero", { hero: true, note: "в позиции" }),
+            step: { kind: "3bet", label: `3бет ${my3bet}bb`, amount: my3bet },
+          },
+          { seat: seat("SB"), step: FOLD },
+          { seat: seat("BB"), step: FOLD },
+        ],
+        "hero",
+        {
+          extra: [
+            {
+              seat: "opener",
+              kind: "4bet",
+              label: `4бет ${their4bet}bb`,
+              amount: their4bet,
+            },
+          ],
+        },
+      );
+    }
+
     case "DEF3BETIP":
     case "DEF3BETOOP": {
       const pct = percentOf(p);

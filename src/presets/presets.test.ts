@@ -98,6 +98,10 @@ describe("пресеты Green Charts — общее", () => {
     // чтобы не остаться без сильных рук в коллирующем диапазоне. Проверяем,
     // что пуш хотя бы наравне с коллом.
     for (const p of ALL_PRESETS) {
+      // Колл 4бета в позиции агрессивной линии не имеет вовсе: в источнике
+      // диапазон 3бета просто раскрашен на «защищаемся / сдаём», 5бета там
+      // нет, поэтому и рейз-действия в чарте нет — проверять нечего.
+      if (p.group === "DEF4BETIP") continue;
       const w = handWeights(p, "AA");
       const floor = p.group === "BLINDS4BET" ? 0.5 : 0.5001;
       expect(w.raise, `${p.id}: AA рейзится лишь ${w.raise}`).toBeGreaterThanOrEqual(floor);
@@ -623,6 +627,24 @@ describe("Blinds Defense vs 4bet (стр. 8)", () => {
       expect(canThreeBet, `${id}: ${cell.label} защищается, но не 3бетится`).toBe(true);
     }
   });
+
+  it.each([15, 18, 26])(
+    "колл 4бета IP vs %i%% умещается в свой же 3бет",
+    (n) => {
+      // Та же логика, что и у блайндов: чарт защиты — это раскраска 3бет-
+      // диапазона, значит ни одной посторонней руки в нём быть не может, и
+      // защищаться чаще, чем 3бетили, тоже нельзя.
+      const def = byId(`def4bet-ip-${n}`);
+      const three = byId(`3betip-${n}`);
+      for (const cell of GRID.flat()) {
+        const d = handWeights(def, cell.label).call;
+        if (d < 0.01) continue;
+        const r = handWeights(three, cell.label).raise;
+        expect(r, `def4bet-ip-${n}: ${cell.label} защищается, но не 3бетится`)
+          .toBeGreaterThanOrEqual(d - 0.001);
+      }
+    },
+  );
 
   it("против SB защищаемся шире, чем против UTG", () => {
     // Чем шире 4бет соперника, тем шире защита. SB 4бетит сильно шире UTG.
