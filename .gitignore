@@ -15,4 +15,7 @@ page*.json
 !charts/**/*.png
 charts/**/*.debug.png
 
+# выгрузки истории рук GGPoker — данные, а не исходники
+*.zip
+
 .DS_Store
