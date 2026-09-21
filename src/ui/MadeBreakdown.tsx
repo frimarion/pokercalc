@@ -11,7 +11,7 @@ import {
 } from "../engine/categorize";
 import { useStore, blockerMask } from "../state/store";
 
-const MADE_LABELS: Record<MadeCategory, string> = {
+export const MADE_LABELS: Record<MadeCategory, string> = {
   "straight-flush": "Стрит-флеш",
   quads: "Каре",
   "full-house": "Фулхаус",
@@ -27,7 +27,7 @@ const MADE_LABELS: Record<MadeCategory, string> = {
   "no-pair": "Нет пары / оверкарты",
 };
 
-const DRAW_LABELS: Record<DrawType, string> = {
+export const DRAW_LABELS: Record<DrawType, string> = {
   "flush-draw": "Флеш-дро",
   oesd: "Стрит-дро (OESD)",
   gutshot: "Гатшот",

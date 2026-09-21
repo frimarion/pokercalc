@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parseCards } from "./cards";
 import { rangeFromLabels, Range, comboIndex } from "./combos";
-import { computeEquity } from "./equity";
+import { computeEquity, computeNextCards } from "./equity";
 
 /** Диапазон из одной конкретной руки (2 карты). */
 function handRange(hand: string): Range {
@@ -77,6 +77,50 @@ describe("preflop equity (Monte Carlo, эталоны)", () => {
 });
 
 describe("range vs range", () => {
+  it("next-card analysis excludes known cards and agrees with river enumeration", () => {
+    const a = handRange("AhAd"), b = handRange("KcKd");
+    const board = parseCards("3c 7s 9d Jc"), dead = parseCards("2s");
+    const next = computeNextCards(a, b, board, { dead });
+    expect(next).toHaveLength(47);
+    expect(next.some((r) => [...board, ...dead].includes(r.card))).toBe(false);
+    for (const row of next) {
+      const eq = computeEquity(a, b, [...board, row.card], { dead });
+      expect(row.equity).toBe(eq.valid ? eq.a.equity : null);
+    }
+    expect(computeNextCards(a, b, [])).toEqual([]);
+  });
+  it("MC matches weighted exact enumeration with asymmetric card removal", () => {
+    const a = handRange("AhAd");
+    const weak = handRange("2h2d");
+    for (let i = 0; i < a.weights.length; i++) a.weights[i] += weak.weights[i];
+    const b = handRange("AhQh");
+    const other = handRange("KcKd");
+    for (let i = 0; i < b.weights.length; i++) b.weights[i] += other.weights[i] * 0.25;
+    const board = parseCards("3c 7s 9d Jc Qs");
+    const exact = computeEquity(a, b, board, { detail: true });
+    const mc = computeEquity(a, b, board, { exactLimit: 0, samples: 40_000, rng: rng(31), detail: true });
+    expect(exact.a.equity).toBeCloseTo(1 / 6);
+    expect(mc.a.equity).toBeCloseTo(exact.a.equity, 2);
+    expect(exact.samples).toBe(3);
+    expect(exact.total).toBe(1.5);
+    expect(exact.combos?.a).toHaveLength(2);
+    expect(exact.combos?.a.find((c) => c.equity === 1)?.samples).toBe(1);
+    expect(mc.combos?.a.reduce((n, c) => n + c.samples, 0)).toBe(mc.samples);
+  });
+
+  it("handles dead cards, duplicate cards and entirely incompatible ranges", () => {
+    const a = handRange("AhAd"), b = handRange("AhKh");
+    expect(computeEquity(a, b, [], { samples: 10 }).valid).toBe(false);
+    expect(computeEquity(a, handRange("KcKd"), [], { dead: parseCards("Ah") }).valid).toBe(false);
+    expect(computeEquity(a, b, parseCards("2c2c3d")).valid).toBe(false);
+  });
+
+  it("includes combo ties and symmetry on a shared royal flush", () => {
+    const r = rangeFromLabels(["22", "33"]);
+    const eq = computeEquity(r, r, parseCards("Ah Kh Qh Jh Th"), { detail: true });
+    expect(eq.a.equity).toBe(0.5);
+    expect(eq.combos?.a.every((c) => c.tie === 1 && c.equity === 0.5)).toBe(true);
+  });
   it("считает и возвращает валидный результат", () => {
     const hero = rangeFromLabels(["AA", "KK", "AKs"]);
     const villain = rangeFromLabels(["QQ", "JJ", "AQs", "KQs"]);

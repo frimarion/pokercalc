@@ -22,6 +22,8 @@ const YELLOW_PARTIAL_GROUPS: PresetGroup[] = ["RFI", "SB3BET", "3BETIP"];
 export type DisplayMode = "pct" | "count" | "both";
 export type Street = "flop" | "turn" | "river";
 export type Side = "hero" | "villain";
+export type ComparisonFilters = { made: MadeCategory[]; draws: DrawType[] };
+const emptyComparisonFilters = (): Record<Side, ComparisonFilters> => ({ hero: { made: [], draws: [] }, villain: { made: [], draws: [] } });
 
 const SCENARIO_KEY = "pokercalc:scenario";
 
@@ -37,6 +39,12 @@ interface AppState {
   ranges: Record<Side, Range>;
   rev: number;
   activeSide: Side; // какой диапазон редактирует матрица
+  comparisonBoard: Card[];
+  comparisonDead: Card[];
+  comparisonFilters: Record<Side, ComparisonFilters>;
+  setComparisonFilters: (side: Side, filters: ComparisonFilters) => void;
+  setComparisonCards: (board: Card[], dead: Card[]) => void;
+  replaceRange: (side: Side, range: Range) => void;
 
   heroCards: (Card | null)[]; // длина 2 — опциональная конкретная рука hero
   board: (Card | null)[]; // длина 5 (флоп3 + тёрн + ривер)
@@ -57,7 +65,7 @@ interface AppState {
   // ── экшены диапазона ──
   setActiveSide: (s: Side) => void;
   setBrush: (w: number) => void;
-  setHandWeight: (label: string, weight: number) => void; // в активный диапазон
+  setHandWeight: (label: string, weight: number, side?: Side) => void;
   clearRange: () => void; // активный диапазон
   morphActiveRange: (keepMade: MadeCategory[], keepDraws: DrawType[]) => void;
   /** actionKind не задан → применяются все действия пресета сразу. */
@@ -107,6 +115,16 @@ export const useStore = create<AppState>((set, get) => ({
   ranges: { hero: new Range(), villain: new Range() },
   rev: 0,
   activeSide: "hero",
+  comparisonBoard: [],
+  comparisonDead: [],
+  comparisonFilters: emptyComparisonFilters(),
+  setComparisonFilters: (side, filters) => set((s) => ({ comparisonFilters: { ...s.comparisonFilters, [side]: filters } })),
+  setComparisonCards: (comparisonBoard, comparisonDead) => set({ comparisonBoard, comparisonDead }),
+  replaceRange: (side, range) => set((s) => ({
+    ranges: { ...s.ranges, [side]: range.clone() }, rev: s.rev + 1,
+    presetView: { ...s.presetView, [side]: null },
+    presetLegend: { ...s.presetLegend, [side]: null },
+  })),
   heroCards: [null, null],
   board: [null, null, null, null, null],
   brushWeight: 1,
@@ -124,8 +142,9 @@ export const useStore = create<AppState>((set, get) => ({
   setBrush: (w) => set({ brushWeight: w }),
   togglePresetColorMode: () => set((s) => ({ presetColorMode: !s.presetColorMode })),
 
-  setHandWeight: (label, weight) => {
-    const { ranges, activeSide, presetView } = get();
+  setHandWeight: (label, weight, side) => {
+    const { ranges, presetView } = get();
+    const activeSide = side ?? get().activeSide;
     for (const idx of comboIndicesForLabel(label)) ranges[activeSide].weights[idx] = weight;
     set((s) => ({
       rev: s.rev + 1,
@@ -224,6 +243,9 @@ export const useStore = create<AppState>((set, get) => ({
   resetAll: () =>
     set((s) => ({
       ranges: { hero: new Range(), villain: new Range() },
+      comparisonBoard: [],
+      comparisonDead: [],
+      comparisonFilters: emptyComparisonFilters(),
       heroCards: [null, null],
       board: [null, null, null, null, null],
       rev: s.rev + 1,
@@ -232,12 +254,15 @@ export const useStore = create<AppState>((set, get) => ({
     })),
 
   saveScenario: () => {
-    const { ranges, heroCards, board } = get();
+    const { ranges, heroCards, board, comparisonBoard, comparisonDead, comparisonFilters } = get();
     const data = {
       hero: Array.from(ranges.hero.weights),
       villain: Array.from(ranges.villain.weights),
       heroCards,
       board,
+      comparisonBoard,
+      comparisonDead,
+      comparisonFilters,
     };
     localStorage.setItem(SCENARIO_KEY, JSON.stringify(data));
   },
@@ -254,9 +279,12 @@ export const useStore = create<AppState>((set, get) => ({
         },
         heroCards: d.heroCards,
         board: d.board,
+        comparisonBoard: d.comparisonBoard ?? [],
+        comparisonDead: d.comparisonDead ?? [],
+        comparisonFilters: d.comparisonFilters ?? emptyComparisonFilters(),
         rev: s.rev + 1,
         presetView: { hero: null, villain: null },
-      presetLegend: { hero: null, villain: null },
+        presetLegend: { hero: null, villain: null },
       }));
       return true;
     } catch {

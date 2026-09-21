@@ -21,6 +21,14 @@ export interface EquityResult {
   samples: number; // итераций (для MC) или раскладов (для точного)
   exact: boolean;
   valid: boolean; // false, если у стороны нет живых комбо
+  combos?: { a: ComboEquity[]; b: ComboEquity[] };
+  nextCards?: { card: Card; equity: number | null; exact: boolean }[];
+}
+
+export interface ComboEquity extends EquitySide {
+  index: number;
+  samples: number;
+  weight: number;
 }
 
 export interface EquityOptions {
@@ -28,6 +36,7 @@ export interface EquityOptions {
   samples?: number; // цель для Monte Carlo
   exactLimit?: number; // порог работы для точного перебора
   rng?: () => number; // источник случайности (для тестов)
+  detail?: boolean;
 }
 
 const DEFAULT_SAMPLES = 80_000;
@@ -64,15 +73,18 @@ function equityExact(
   liveB: Live[],
   board: Card[],
   deadMask: bigint,
+  detail: boolean,
 ): EquityResult {
   const need = 5 - board.length;
   let winA = 0;
   let winB = 0;
   let tie = 0;
   let total = 0;
+  let samples = 0;
+  const stats = detail ? new ComboStats() : null;
 
-  for (const [, a1, a2, wa] of liveA) {
-    for (const [, b1, b2, wb] of liveB) {
+  for (const [ai, a1, a2, wa] of liveA) {
+    for (const [bi, b1, b2, wb] of liveB) {
       if (a1 === b1 || a1 === b2 || a2 === b1 || a2 === b2) continue; // пересечение рук
       const w = wa * wb;
       const used = deadMask | (1n << BigInt(a1)) | (1n << BigInt(a2)) | (1n << BigInt(b1)) | (1n << BigInt(b2));
@@ -89,11 +101,13 @@ function equityExact(
         else if (eb > ea) winB += w;
         else tie += w;
         total += w;
+        samples++;
+        stats?.add(ai, bi, ea, eb, w);
       });
     }
   }
 
-  return finalize(winA, winB, tie, total, total, true);
+  return withStats(finalize(winA, winB, tie, total, samples, true), stats, liveA, liveB);
 }
 
 /** Monte Carlo: сэмплируем комбо по весам + случайный рантайм. */
@@ -104,13 +118,23 @@ function equityMonteCarlo(
   deadMask: bigint,
   samples: number,
   rng: () => number,
+  detail: boolean,
 ): EquityResult {
   const need = 5 - board.length;
-  const cumA = cumulative(liveA);
-  const cumB = cumulative(liveB);
+  // Sample the joint distribution wa * wb over compatible pairs. Retrying
+  // only B after choosing A biases A towards hands that block more of B.
+  const conditionalB = liveA.map((a) => {
+    let sum = 0;
+    return liveB.map((b) => {
+      if (a[1] !== b[1] && a[1] !== b[2] && a[2] !== b[1] && a[2] !== b[2]) sum += b[3];
+      return sum;
+    });
+  });
+  let mass = 0;
+  const cumA = liveA.map((a, i) => (mass += a[3] * conditionalB[i][liveB.length - 1]));
   const totalWA = cumA[cumA.length - 1];
-  const totalWB = cumB[cumB.length - 1];
-  if (totalWA <= 0 || totalWB <= 0) return invalid();
+  if (totalWA <= 0) return invalid();
+  const stats = detail ? new ComboStats() : null;
 
   let winA = 0;
   let winB = 0;
@@ -118,42 +142,21 @@ function equityMonteCarlo(
   let counted = 0;
 
   const runout: Card[] = new Array(need);
+  const deck = Array.from({ length: 52 }, (_, c) => c).filter((c) => !isBlocked(deadMask, c));
 
   for (let s = 0; s < samples; s++) {
-    const a = liveA[pick(cumA, rng() * totalWA)];
-    // Виллана сэмплируем с отбраковкой пересечения с рукой A.
-    let b: Live | null = null;
-    for (let tries = 0; tries < 8; tries++) {
-      const cand = liveB[pick(cumB, rng() * totalWB)];
-      if (cand[1] !== a[1] && cand[1] !== a[2] && cand[2] !== a[1] && cand[2] !== a[2]) {
-        b = cand;
-        break;
-      }
-    }
-    if (!b) continue;
+    const ai = pick(cumA, rng() * totalWA);
+    const a = liveA[ai];
+    const cumB = conditionalB[ai];
+    const b = liveB[pick(cumB, rng() * cumB[cumB.length - 1])];
 
-    const used = deadMask | (1n << BigInt(a[1])) | (1n << BigInt(a[2])) | (1n << BigInt(b[1])) | (1n << BigInt(b[2]));
-
-    // Случайный рантайм без повторов.
-    let ok = true;
-    let drawn = 0n;
+    const remaining = deck.filter((c) => c !== a[1] && c !== a[2] && c !== b[1] && c !== b[2]);
+    // Partial Fisher–Yates: uniform runout, even with many dead cards.
     for (let i = 0; i < need; i++) {
-      let card = -1;
-      for (let tries = 0; tries < 20; tries++) {
-        const c = Math.floor(rng() * 52);
-        if (!isBlocked(used, c) && !isBlocked(drawn, c)) {
-          card = c;
-          break;
-        }
-      }
-      if (card < 0) {
-        ok = false;
-        break;
-      }
-      drawn |= 1n << BigInt(card);
-      runout[i] = card;
+      const j = i + Math.floor(rng() * (remaining.length - i));
+      [remaining[i], remaining[j]] = [remaining[j], remaining[i]];
+      runout[i] = remaining[i];
     }
-    if (!ok) continue;
 
     const full = board.concat(runout);
     const ea = evaluate([a[1], a[2], ...full]);
@@ -162,9 +165,36 @@ function equityMonteCarlo(
     else if (eb > ea) winB++;
     else tie++;
     counted++;
+    stats?.add(a[0], b[0], ea, eb, 1);
   }
 
-  return finalize(winA, winB, tie, counted, samples, false);
+  return withStats(finalize(winA, winB, tie, counted, counted, false), stats, liveA, liveB);
+}
+
+class ComboStats {
+  a = new Map<number, [number, number, number, number]>();
+  b = new Map<number, [number, number, number, number]>();
+  add(ai: number, bi: number, ea: number, eb: number, w: number) {
+    for (const [map, idx, win] of [[this.a, ai, ea > eb], [this.b, bi, eb > ea]] as const) {
+      const row = map.get(idx) ?? [0, 0, 0, 0];
+      row[0] += win ? w : 0;
+      row[1] += ea === eb ? w : 0;
+      row[2] += w;
+      row[3]++;
+      map.set(idx, row);
+    }
+  }
+}
+
+function withStats(result: EquityResult, stats: ComboStats | null, a: Live[], b: Live[]): EquityResult {
+  if (!stats || !result.valid) return result;
+  const rows = (live: Live[], map: ComboStats["a"]): ComboEquity[] => live.flatMap(([index, , , weight]) => {
+    const row = map.get(index);
+    if (!row) return [];
+    const [win, tie, total, samples] = row;
+    return [{ index, weight, samples, win: win / total, tie: tie / total, equity: (win + tie / 2) / total }];
+  });
+  return { ...result, combos: { a: rows(a, stats.a), b: rows(b, stats.b) } };
 }
 
 function finalize(
@@ -189,23 +219,13 @@ function finalize(
   return { a, b, total, samples, exact, valid: true };
 }
 
-function cumulative(live: Live[]): number[] {
-  const cum: number[] = new Array(live.length);
-  let acc = 0;
-  for (let i = 0; i < live.length; i++) {
-    acc += live[i][3];
-    cum[i] = acc;
-  }
-  return cum;
-}
-
 /** Бинарный поиск индекса по префиксным суммам. */
 function pick(cum: number[], target: number): number {
   let lo = 0;
   let hi = cum.length - 1;
   while (lo < hi) {
     const mid = (lo + hi) >> 1;
-    if (cum[mid] < target) lo = mid + 1;
+    if (cum[mid] <= target) lo = mid + 1;
     else hi = mid;
   }
   return lo;
@@ -251,6 +271,9 @@ export function computeEquity(
   board: Card[],
   opts: EquityOptions = {},
 ): EquityResult {
+  const known = [...board, ...(opts.dead ?? [])];
+  if (board.length > 5 || known.some((c) => !Number.isInteger(c) || c < 0 || c > 51)
+    || new Set(known).size !== known.length || known.length + (5 - board.length) + 4 > 52) return invalid();
   const deadMask = maskOf([...board, ...(opts.dead ?? [])]);
   const liveA = a.liveCombos(deadMask);
   const liveB = b.liveCombos(deadMask);
@@ -263,7 +286,7 @@ export function computeEquity(
 
   const exactLimit = opts.exactLimit ?? DEFAULT_EXACT_LIMIT;
   if (board.length >= 3 && work <= exactLimit) {
-    return equityExact(liveA, liveB, board, deadMask);
+    return equityExact(liveA, liveB, board, deadMask, opts.detail ?? false);
   }
   return equityMonteCarlo(
     liveA,
@@ -272,5 +295,16 @@ export function computeEquity(
     deadMask,
     opts.samples ?? DEFAULT_SAMPLES,
     opts.rng ?? Math.random,
+    opts.detail ?? false,
   );
+}
+
+/** Conditional equity after each possible turn/river; original range weights stay fixed. */
+export function computeNextCards(a: Range, b: Range, board: Card[], opts: EquityOptions = {}): NonNullable<EquityResult["nextCards"]> {
+  if (board.length !== 3 && board.length !== 4) return [];
+  const used = new Set([...board, ...(opts.dead ?? [])]);
+  return Array.from({ length: 52 }, (_, c) => c).filter((c) => !used.has(c)).map((card) => {
+    const result = computeEquity(a, b, [...board, card], { ...opts, detail: false, samples: 10_000, exactLimit: 20_000 });
+    return { card, equity: result.valid ? result.a.equity : null, exact: result.exact };
+  });
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "../engine/cards";
 import { Range } from "../engine/combos";
 import { EquityResult } from "../engine/equity";
@@ -7,6 +7,7 @@ import type { EquityRequest, EquityResponse } from "../workers/equity.worker";
 interface EquityState {
   result: EquityResult | null;
   computing: boolean;
+  error?: string;
 }
 
 /**
@@ -20,43 +21,37 @@ export function useEquity(
   board: Card[],
   dead: Card[],
   signature: string,
+  options: { samples?: number; detail?: boolean; nextCards?: boolean } = {},
 ): EquityState {
   const [state, setState] = useState<EquityState>({ result: null, computing: false });
-  const workerRef = useRef<Worker | null>(null);
-  const ridRef = useRef(0);
-
-  // Один воркер на всё время жизни.
-  useEffect(() => {
-    const worker = new Worker(new URL("../workers/equity.worker.ts", import.meta.url), {
-      type: "module",
-    });
-    worker.onmessage = (e: MessageEvent<EquityResponse>) => {
-      if (e.data.rid !== ridRef.current) return; // устаревший ответ
-      setState({ result: e.data.result, computing: false });
-    };
-    workerRef.current = worker;
-    return () => worker.terminate();
-  }, []);
 
   useEffect(() => {
-    const worker = workerRef.current;
-    if (!worker) return;
-    setState((s) => ({ ...s, computing: true }));
+    let worker: Worker | undefined;
+    let cancelled = false;
+    setState({ result: null, computing: true });
     const t = setTimeout(() => {
-      const rid = ++ridRef.current;
+      worker = new Worker(new URL("../workers/equity.worker.ts", import.meta.url), { type: "module" });
+      worker.onmessage = (e: MessageEvent<EquityResponse>) => {
+        if (!cancelled) setState({ result: e.data.result, computing: false });
+      };
+      worker.onerror = () => {
+        if (!cancelled) setState({ result: null, computing: false, error: "Не удалось рассчитать эквити. Измените параметры или повторите расчёт." });
+      };
       const req: EquityRequest = {
-        rid,
+        rid: 1,
         aWeights: hero.weights.slice(),
         bWeights: villain.weights.slice(),
         board,
         dead,
-        samples: undefined,
+        samples: options.samples,
+        detail: options.detail,
+        nextCards: options.nextCards,
       };
       worker.postMessage(req);
     }, 220);
-    return () => clearTimeout(t);
+    return () => { cancelled = true; clearTimeout(t); worker?.terminate(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signature]);
+  }, [signature, options.samples, options.detail, options.nextCards]);
 
   return state;
 }

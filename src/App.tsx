@@ -4,9 +4,10 @@ import { MatrixPanel } from "./ui/MatrixPanel";
 import { SidePanel } from "./ui/SidePanel";
 import { Trainer } from "./ui/Trainer";
 import { Hands } from "./ui/Hands";
+import { RangeComparison } from "./ui/RangeComparison";
 import { useStore } from "./state/store";
 
-type Mode = "ranges" | "trainer" | "hands";
+type Mode = "ranges" | "compare" | "trainer" | "hands";
 
 function HeaderTools() {
   const saveScenario = useStore((s) => s.saveScenario);
@@ -58,16 +59,19 @@ export default function App() {
         <span className="text-lg font-black tracking-tight">
           Poker<span className="text-emerald-400">Calc</span>
         </span>
-        <div className="flex items-center gap-1.5 sm:ml-3">
+        <div className="flex flex-wrap items-center gap-1.5 sm:ml-3">
           {tab("ranges", "Диапазоны")}
+          {tab("compare", "Сравнение")}
           {tab("trainer", "Тренажёр")}
           {tab("hands", "История рук")}
         </div>
-        {mode === "ranges" && <HeaderTools />}
+        {(mode === "ranges" || mode === "compare") && <HeaderTools />}
       </header>
 
       <main className="mx-auto max-w-[1400px] px-3 py-4 sm:px-6 sm:py-6">
-        {mode === "trainer" ? (
+        {mode === "compare" ? (
+          <RangeComparison />
+        ) : mode === "trainer" ? (
           <Trainer />
         ) : mode === "hands" ? (
           <Hands />
