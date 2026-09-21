@@ -185,6 +185,7 @@ export interface QuizSpot {
 function raiseLabel(p: RangePreset): string {
   switch (p.group) {
     case "RFI":
+    case "RFIMICRO":
     case "MTTRFI":
       return "Открыть рейзом";
     case "ISO":
@@ -220,6 +221,8 @@ function situationOf(p: RangePreset): string {
   switch (p.group) {
     case "RFI":
       return `Вы на ${p.position}. Все до вас сфолдили.`;
+    case "RFIMICRO":
+      return `Вы на ${p.position}, источник «кэш микро». Все до вас сфолдили.`;
     case "ISO":
       return `Вы на ${p.position}. До вас лимп.`;
     case "MTTRFI":
@@ -357,7 +360,7 @@ export function isCorrect(q: Question, answer: QuizAnswer): boolean {
  * сверяет объединение секций со всеми группами, какие есть в чартах.
  */
 export interface TrainerSection {
-  key: "cash" | "mtt";
+  key: "cash" | "cash-micro" | "mtt";
   label: string;
   note: string;
   groups: PresetGroup[];
@@ -379,6 +382,12 @@ export const TRAINER_SECTIONS: TrainerSection[] = [
       "BLINDS4BET",
       "DEF4BETIP",
     ],
+  },
+  {
+    key: "cash-micro",
+    label: "Кэш · микро",
+    note: "«кэш микро» — свой источник, только RFI",
+    groups: ["RFIMICRO"],
   },
   {
     key: "mtt",

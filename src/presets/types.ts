@@ -3,6 +3,7 @@
 
 export type PresetGroup =
   | "RFI"
+  | "RFIMICRO"
   | "ISO"
   | "SB3BET"
   | "BBDEF"
@@ -85,6 +86,7 @@ export const SITUATIONAL_WEIGHT = 0.5;
 
 export const GROUP_LABELS: Record<PresetGroup, string> = {
   RFI: "RFI — открытие",
+  RFIMICRO: "RFI (кэш микро) — открытие",
   ISO: "ISO — изолэйт после лимпа",
   SB3BET: "SB — 3бет защита",
   BBDEF: "BB — защита",

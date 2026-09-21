@@ -4,6 +4,7 @@
 
 import { RangePreset } from "./types";
 import { RFI_PRESETS } from "./rfi";
+import { RFI_MICRO_PRESETS } from "./rfiMicro";
 import { ISO_PRESETS } from "./iso";
 import { SB3BET_PRESETS } from "./sbDefense";
 import { BBDEF_PRESETS } from "./bbDefense";
@@ -21,6 +22,7 @@ import { MTT_3BETPUSH_PRESETS } from "./mtt/threeBetPush";
 
 export const ALL_PRESETS: RangePreset[] = [
   ...RFI_PRESETS,
+  ...RFI_MICRO_PRESETS,
   ...ISO_PRESETS,
   ...SB3BET_PRESETS,
   ...BBDEF_PRESETS,

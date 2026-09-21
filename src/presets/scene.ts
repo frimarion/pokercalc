@@ -329,7 +329,8 @@ export function sceneFor(p: RangePreset): Scene {
   const g: PresetGroup = p.group;
 
   switch (g) {
-    case "RFI": {
+    case "RFI":
+    case "RFIMICRO": {
       const b = ring(CASH_SEATS, p.position);
       return finalize(b.seats, p.position, b.steps);
     }

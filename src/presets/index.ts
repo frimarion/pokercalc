@@ -12,6 +12,8 @@ import { MTT_BBDEF_PRESETS } from "./mtt/bbDefense";
 import { MTT_PUSH_PRESETS } from "./mtt/push";
 import { MTT_3BETPUSH_PRESETS } from "./mtt/threeBetPush";
 import { RFI_PRESETS } from "./rfi";
+import { RFI_MICRO_PRESETS } from "./rfiMicro";
+import { RFI_MICRO_TREE } from "./rfiMicroTree";
 import { ISO_PRESETS } from "./iso";
 import { SB3BET_PRESETS } from "./sbDefense";
 import { BBDEF_PRESETS } from "./bbDefense";
@@ -36,6 +38,7 @@ export {
   defaultActionColor,
 } from "./types";
 export { RFI_PRESETS } from "./rfi";
+export { RFI_MICRO_PRESETS } from "./rfiMicro";
 export { ISO_PRESETS } from "./iso";
 export { SB3BET_PRESETS } from "./sbDefense";
 export { BBDEF_PRESETS } from "./bbDefense";
@@ -93,8 +96,15 @@ export const FORMATS: Format[] = [
     key: "cash",
     label: "Кэш",
     note: "6-max · Green Charts",
+    configLabel: "Источник",
     configs: [
-      { key: "100bb", label: "100bb", note: "6-max · Green Charts", tree: ACTION_TREE },
+      { key: "100bb", label: "Green Charts", note: "6-max · Green Charts, полное дерево", tree: ACTION_TREE },
+      {
+        key: "micro",
+        label: "Микро",
+        note: "6-max · «кэш микро», пока только RFI — ответы соперников не оцифрованы",
+        tree: RFI_MICRO_TREE,
+      },
     ],
   },
   {
@@ -109,6 +119,7 @@ export const FORMATS: Format[] = [
 /** Пресеты, сгруппированные по типу чарта. */
 export const PRESET_GROUPS: { group: PresetGroup; presets: RangePreset[] }[] = [
   { group: "RFI", presets: RFI_PRESETS },
+  { group: "RFIMICRO", presets: RFI_MICRO_PRESETS },
   { group: "ISO", presets: ISO_PRESETS },
   { group: "SB3BET", presets: SB3BET_PRESETS },
   { group: "BBDEF", presets: BBDEF_PRESETS },
