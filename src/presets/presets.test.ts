@@ -457,11 +457,12 @@ describe("Колл BB — кэш микро", () => {
   });
 
   it("чем позднее опенер, тем шире колл", () => {
-    const [utg, co, bu] = ["utg-mp", "co", "bu"].map(
+    const [utg, co, bu, sb] = ["utg-mp", "co", "bu", "sb"].map(
       (k) => presetById(`bbcall-micro-vs-${k}`)!,
     );
     expect(pct(co)).toBeGreaterThan(pct(utg));
     expect(pct(bu)).toBeGreaterThan(pct(co));
+    expect(pct(sb)).toBeGreaterThan(pct(bu));
   });
 
   it("пересечение с 3бетом — ровно то, что в источнике", () => {
@@ -474,6 +475,10 @@ describe("Колл BB — кэш микро", () => {
         "TT", "KQs", "KJs", "KTs", "QJs", "QTs", "JTs", "J9s", "J8s", "J7s",
         "T9s", "T8s", "T7s", "AQo", "ATo", "KJo", "KTo", "QJo", "QTo", "JTo",
         "Q5s", "Q4s", "J6s", "J5s", "T6s",
+      ],
+      sb: [
+        "A3s", "A2s", "K5s", "K4s", "K3s", "K2s", "Q5s", "Q4s", "Q3s", "Q2s",
+        "A7o", "A6o", "A5o", "A4o", "A3o", "A2o", "K8o", "K7o",
       ],
     };
     for (const [k, expected] of Object.entries(OVERLAP)) {

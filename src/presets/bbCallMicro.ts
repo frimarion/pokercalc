@@ -111,4 +111,27 @@ export const BB_CALL_MICRO_PRESETS: RangePreset[] = [
       },
     ],
   },
+  {
+    id: "bbcall-micro-vs-sb",
+    group: "BBCALLMICRO",
+    position: "BB vs SB",
+    title: "Колл BB микро · vs SB",
+    subtitle: "BB — колл опена SB: зелёный против 3bb, жёлтый добавляется против 2.5bb",
+    actions: [
+      {
+        kind: "call",
+        label: "колл vs 3bb",
+        color: "green",
+        always: ["88", "77", "66", "55", "44", "33", "22", "A9s", "A8s", "A7s", "A6s", "A3s", "A2s", "K9s", "K8s", "K7s", "K6s", "K5s", "K4s", "K3s", "K2s", "Q9s", "Q8s", "Q7s", "Q6s", "Q5s", "Q4s", "Q3s", "Q2s", "J9s", "J8s", "J7s", "T9s", "T8s", "T7s", "98s", "97s", "96s", "95s", "87s", "86s", "85s", "76s", "75s", "74s", "65s", "64s", "63s", "54s", "53s", "52s", "43s", "42s", "32s", "AJo", "ATo", "A9o", "A8o", "KQo", "KJo", "KTo", "QJo", "QTo", "JTo"],
+        situational: [],
+      },
+      {
+        kind: "call",
+        label: "колл vs 2.5bb",
+        color: "yellow",
+        always: [],
+        situational: ["A7o", "A6o", "A5o", "A4o", "A3o", "A2o", "K9o", "K8o", "K7o", "Q9o", "Q8o", "J9o", "J8o", "T9o", "T8o"],
+      },
+    ],
+  },
 ];
