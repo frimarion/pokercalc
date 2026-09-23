@@ -193,6 +193,8 @@ function raiseLabel(p: RangePreset): string {
       return "Изолировать рейзом";
     case "DEF3BETIP":
     case "DEF3BETOOP":
+    case "DEF3BETIPMICRO":
+    case "DEF3BETOOPMICRO":
     case "MTTDEF3BET":
       return "4бет";
     case "BLINDS4BET":
@@ -211,7 +213,7 @@ function raiseLabel(p: RangePreset): string {
  * целиком: там встречается служебное («OOP vs 3bet 18% (SB vs BB)»), поэтому
  * позиция и процент вытаскиваются по отдельности.
  */
-function situationOf(p: RangePreset): string {
+export function situationOf(p: RangePreset): string {
   const percent = p.position.match(/(\d+)%/)?.[1];
   // «vs BU 2.5bb» → место + сайзинг опена
   const opener = p.position.replace(/^vs\s+/, "").match(/^([A-Z]+)\s*(.*)$/);
@@ -223,6 +225,18 @@ function situationOf(p: RangePreset): string {
       return `Вы на ${p.position}. Все до вас сфолдили.`;
     case "RFIMICRO":
       return `Вы на ${p.position}, источник «кэш микро». Все до вас сфолдили.`;
+    case "3BETIPMICRO":
+      return `Вы в позиции, источник «кэш микро». ${seat} открыл рейзом, остальные сфолдили.`;
+    case "3BETOOPMICRO": {
+      const [heroSeat, openPart] = p.position.split(" vs ");
+      return `Вы на ${heroSeat}, источник «кэш микро». ${openPart.replace(",", "/")} открыл рейзом, остальные сфолдили.`;
+    }
+    case "DEF3BETIPMICRO":
+      return `Вы открыли с ${p.position}, блайнд ответил 3бетом. Источник «кэш микро», вы в позиции.`;
+    case "DEF3BETOOPMICRO":
+      return p.position === "SB"
+        ? "Вы открыли с SB, BB ответил 3бетом (он в позиции). Источник «кэш микро», вы без позиции."
+        : `Вы открыли с ${p.position}, 3бет пришёл от игрока в позиции. Источник «кэш микро», вы без позиции.`;
     case "ISO":
       return `Вы на ${p.position}. До вас лимп.`;
     case "MTTRFI":
@@ -309,6 +323,25 @@ function decoyRaiseLabel(p: RangePreset): string | null {
   return null;
 }
 
+/**
+ * Чарты, по которым тренажёр не спрашивает.
+ *
+ * Рестил с блайндов пак FF START описывает всего двумя линиями — 3бет-пуш или
+ * фолд. Но на 16-22bb против опена 2bb колл с блайнда существует и часто
+ * правилен: BB закрывает торговлю и доплачивает 1bb в банк из 4.5bb. Колл-
+ * диапазона в источнике нет, поэтому вопрос предлагал бы выбор из заведомо
+ * неполного набора кнопок и учил бы отвечать пушем там, где чарт просто
+ * молчит. В разделе «Чарты» оба остаются: как справка по пуш-диапазону они
+ * верны.
+ *
+ * Спотам с позиции (`*-vs-early`, `*-vs-late`) это не мешает: там мы не в
+ * блайнде, цена колда куда хуже, и пуш-фолд — разумное упрощение.
+ */
+const NO_QUIZ = new Set([
+  "mtt-threebetpush-blinds-vs-early",
+  "mtt-threebetpush-blinds-vs-late",
+]);
+
 /** Все споты, по которым можно спрашивать. */
 export const QUIZ_SPOTS: QuizSpot[] = ALL_PRESETS.map((p) => {
   const answers: { key: QuizAnswer; label: string }[] = [
@@ -330,7 +363,7 @@ export const QUIZ_SPOTS: QuizSpot[] = ALL_PRESETS.map((p) => {
     answers,
     hands: interestingHands(p),
   };
-}).filter((s) => s.hands.length > 0);
+}).filter((s) => s.hands.length > 0 && !NO_QUIZ.has(s.presetId));
 
 export interface Question {
   spot: QuizSpot;
@@ -386,8 +419,14 @@ export const TRAINER_SECTIONS: TrainerSection[] = [
   {
     key: "cash-micro",
     label: "Кэш · микро",
-    note: "«кэш микро» — свой источник, только RFI",
-    groups: ["RFIMICRO"],
+    note: "«кэш микро» — свой источник: RFI, 3бет IP/OOP с блайндов и защита опенера",
+    groups: [
+      "RFIMICRO",
+      "3BETIPMICRO",
+      "3BETOOPMICRO",
+      "DEF3BETIPMICRO",
+      "DEF3BETOOPMICRO",
+    ],
   },
   {
     key: "mtt",

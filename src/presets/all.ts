@@ -9,6 +9,10 @@ import { ISO_PRESETS } from "./iso";
 import { SB3BET_PRESETS } from "./sbDefense";
 import { BBDEF_PRESETS } from "./bbDefense";
 import { THREEBET_IP_PRESETS } from "./threeBetIP";
+import { THREEBET_IP_MICRO_PRESETS } from "./threeBetIPMicro";
+import { THREEBET_OOP_MICRO_PRESETS } from "./threeBetOOPMicro";
+import { DEF3BETOOP_MICRO_PRESETS } from "./defenseVs3betMicro";
+import { DEF3BETIP_MICRO_PRESETS } from "./defenseVs3betIPMicro";
 import { DEF3BETIP_PRESETS, DEF3BETOOP_PRESETS } from "./defenseVs3bet";
 import { BLINDS4BET_PRESETS } from "./blinds4bet";
 import { DEF4BETIP_PRESETS } from "./def4betIP";
@@ -27,6 +31,10 @@ export const ALL_PRESETS: RangePreset[] = [
   ...SB3BET_PRESETS,
   ...BBDEF_PRESETS,
   ...THREEBET_IP_PRESETS,
+  ...THREEBET_IP_MICRO_PRESETS,
+  ...THREEBET_OOP_MICRO_PRESETS,
+  ...DEF3BETOOP_MICRO_PRESETS,
+  ...DEF3BETIP_MICRO_PRESETS,
   ...DEF3BETIP_PRESETS,
   ...DEF3BETOOP_PRESETS,
   ...BLINDS4BET_PRESETS,

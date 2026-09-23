@@ -354,6 +354,117 @@ export function sceneFor(p: RangePreset): Scene {
       return finalize(b.seats, hero, b.steps);
     }
 
+    case "3BETIPMICRO": {
+      // В отличие от 3BETIP (Green Charts, ширина опена задана процентом),
+      // здесь опенер известен точно — UTG/MP/CO, поэтому он садится на своё
+      // настоящее место, а не в вымышленный слот. 3бетор всё ещё не назван
+      // чартом (им может быть любая более поздняя позиция), поэтому садится
+      // сразу за опенером — та же приближённая посадка, что и в 3BETIP.
+      const { seat: op, size } = openerOf(p);
+      const idx = CASH_SEATS.indexOf(op);
+      const gapToBlinds = Math.max(0, CASH_SEATS.length - 2 - idx - 2);
+      return fromSlots(
+        [
+          ...folded(1, idx),
+          {
+            seat: seat(op),
+            step: { kind: "raise", label: `Рейз ${size}bb`, amount: size },
+          },
+          { seat: seat("hero", { hero: true, note: "в позиции" }) },
+          ...waiting(90, gapToBlinds),
+          { seat: seat("SB") },
+          { seat: seat("BB") },
+        ],
+        "hero",
+      );
+    }
+
+    case "3BETOOPMICRO": {
+      // Защитник (SB/BB) и хотя бы один опенер названы точно. Когда чарт
+      // покрывает сразу двух опенеров разом (например «UTG,MP» — источник дал
+      // на них общий диапазон), настоящий раскрывший карты неизвестен: опенер
+      // садится на место первого из списка, но помечается неточным.
+      const [heroSeat, openPart] = p.position.split(" vs ");
+      const openers = openPart.split(",").map((s) => s.trim());
+      const first = openers[0];
+      const size = cashOpenSize(first);
+      const marks =
+        openers.length > 1
+          ? { [first]: { note: `открывает ${openers.join(" или ")}`, exact: false } }
+          : {};
+      const b = ring(
+        CASH_SEATS,
+        heroSeat,
+        { seat: first, kind: "raise", label: `Рейз ${size}bb`, amount: size },
+        marks,
+      );
+      return finalize(b.seats, heroSeat, b.steps);
+    }
+
+    case "DEF3BETIPMICRO": {
+      // Зеркально DEF3BETOOPMICRO: опенер сидит на настоящем месте и остаётся
+      // в позиции, потому что 3бет пришёл с блайнда. Какой именно блайнд
+      // 3бетнул, чарт не называет — второй молча сфолдил.
+      const heroSeat = p.position; // UTG/MP/CO/BU
+      const openSize = cashOpenSize(heroSeat);
+      const idx = CASH_SEATS.indexOf(heroSeat);
+      const open = { kind: "raise" as const, label: `Рейз ${openSize}bb`, amount: openSize };
+      const villain3bet = threeBetSize(openSize, true);
+      return fromSlots(
+        [
+          ...folded(1, idx),
+          { seat: seat(heroSeat, { hero: true }), step: open },
+          ...folded(idx + 10, 3 - idx),
+          { seat: seat("SB"), step: FOLD },
+          {
+            seat: vague("villain", "3бет с блайнда"),
+            step: { kind: "3bet", label: `3бет ${villain3bet}bb`, amount: villain3bet },
+          },
+        ],
+        heroSeat,
+      );
+    }
+
+    case "DEF3BETOOPMICRO": {
+      // Опенер (герой) сидит на настоящем месте — UTG/MP/CO/SB. Против SB
+      // 3бетит именно BB (он там в позиции), это чарт называет точно. Против
+      // UTG/MP/CO 3бетор — любая более поздняя позиция, чарт её не называет.
+      const heroSeat = p.position;
+      const openSize = cashOpenSize(heroSeat);
+      const open = { kind: "raise" as const, label: `Рейз ${openSize}bb`, amount: openSize };
+      if (heroSeat === "SB") {
+        const bb3bet = threeBetSize(openSize, true);
+        return fromSlots(
+          [
+            ...folded(1, 4),
+            { seat: seat("SB", { hero: true }), step: open },
+            {
+              seat: seat("BB"),
+              step: { kind: "3bet", label: `3бет ${bb3bet}bb`, amount: bb3bet },
+            },
+          ],
+          "SB",
+        );
+      }
+      const idx = CASH_SEATS.indexOf(heroSeat);
+      const villain3bet = threeBetSize(openSize, false);
+      const gapToBlinds = Math.max(0, CASH_SEATS.length - 2 - idx - 2);
+      return fromSlots(
+        [
+          ...folded(1, idx),
+          { seat: seat(heroSeat, { hero: true }), step: open },
+          {
+            seat: vague("villain", "3бет в позиции"),
+            step: { kind: "3bet", label: `3бет ${villain3bet}bb`, amount: villain3bet },
+          },
+          ...waiting(80, gapToBlinds),
+          { seat: seat("SB") },
+          { seat: seat("BB") },
+        ],
+        heroSeat,
+      );
+    }
+
     case "3BETIP": {
       // Ширина опена задана процентом, место соперника чарт не называет — но
       // стол от этого не пустеет: двое сдали до опенера, блайнды сидят позади
