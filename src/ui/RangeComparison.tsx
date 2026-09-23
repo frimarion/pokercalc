@@ -14,12 +14,13 @@ const BOX = "rounded-2xl border border-white/10 bg-[#0f1614] p-3 sm:p-4";
 const BTN = "rounded-lg border border-white/15 px-3 py-2 text-xs hover:bg-white/10 disabled:opacity-30";
 const COLOR = { hero: "#34d399", villain: "#38bdf8" };
 type Filters = { made: MadeCategory[]; draws: DrawType[] };
+type CategoryPreview = { category: MadeCategory | DrawType; side?: Side };
 const emptyFilters = (): Filters => ({ made: [], draws: [] });
 const hasFilters = (f: Filters) => f.made.length + f.draws.length > 0;
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
-function RangeEditor({ side, mask, filtered, eq, heatmap }: {
-  side: Side; mask: bigint; filtered: Range; eq?: ComboEquity[]; heatmap: boolean;
+function RangeEditor({ side, mask, filtered, preview, eq, heatmap }: {
+  side: Side; mask: bigint; filtered: Range; preview?: { range: Range; label: string }; eq?: ComboEquity[]; heatmap: boolean;
 }) {
   const range = useStore((s) => s.ranges[side]);
   useStore((s) => s.rev);
@@ -40,6 +41,7 @@ function RangeEditor({ side, mask, filtered, eq, heatmap }: {
       <h2 className="font-bold" style={{ color }}>{side === "hero" ? "Hero" : "Villain"}</h2>
       <span className="text-xs text-neutral-400">{shown.toFixed(1)} / {live.toFixed(1)} комбо · {pct(range.totalCombos() / 1326)} рук</span>
     </div>
+    {preview && <p className="mb-2 text-xs text-amber-300">{preview.label}: {preview.range.totalCombos(mask).toFixed(1)} комбо в исходном диапазоне</p>}
     <div className="mb-3 flex flex-wrap items-center gap-2">
       <label className="text-xs text-neutral-400">Вес <input aria-label={`Вес ${side}`} type="number" min="1" max="100" value={brush}
         onChange={(e) => setBrush(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} className="w-14 rounded border border-white/15 p-1 text-white" /> %</label>
@@ -57,6 +59,8 @@ function RangeEditor({ side, mask, filtered, eq, heatmap }: {
       {GRID.map(({ label, indices }) => {
         const available = indices.filter((i) => ALL_COMBOS[i].every((c) => !(mask & (1n << BigInt(c)))));
         const selected = available.reduce((n, i) => n + filtered.weights[i], 0);
+        const visibleWeight = available.length ? selected / available.length : 0;
+        const highlighted = preview ? available.reduce((n, i) => n + preview.range.weights[i], 0) : 0;
         const weight = range.handWeight(label);
         const rows = available.flatMap((i) => equity.has(i) ? [equity.get(i)!] : []);
         const mass = rows.reduce((n, r) => n + r.weight, 0);
@@ -64,7 +68,7 @@ function RangeEditor({ side, mask, filtered, eq, heatmap }: {
         const bg = heatmap && strength !== null ? `hsl(${strength * 130} 55% 35%)` : color;
         return <button key={label} data-hand={label} disabled={!available.length}
           aria-label={`${side} ${label}, вес ${Math.round(weight * 100)}%`}
-          title={`${label}: ${selected.toFixed(2)} комбо${strength !== null ? ` · эквити ${pct(strength)}` : ""}`}
+          title={`${label}: ${selected.toFixed(2)} комбо${preview ? ` · ${preview.label}: ${highlighted.toFixed(2)}` : ""}${strength !== null ? ` · эквити ${pct(strength)}` : ""}`}
           onPointerDown={(e) => {
             if (e.button !== 0) return;
             e.preventDefault();
@@ -75,8 +79,10 @@ function RangeEditor({ side, mask, filtered, eq, heatmap }: {
           }}
           onClick={(e) => { if (e.detail === 0) setWeight(label, weight ? 0 : brush / 100, side); }}
           className="relative flex aspect-square min-w-0 flex-col items-center justify-center overflow-hidden rounded text-[9px] font-semibold sm:text-[11px] disabled:opacity-20"
-          style={{ background: weight > 0 ? `${color}20` : "#1a2420", color: weight > 0 ? "#f0fdfa" : "#7b8c83", opacity: weight && !selected ? 0.35 : 1 }}>
-          {weight > 0 && <span className="pointer-events-none absolute inset-y-0 left-0 opacity-50" style={{ width: `${weight * 100}%`, background: bg }} />}
+          style={{ background: selected > 0 ? `${color}20` : "#1a2420", color: selected > 0 || highlighted > 0 ? "#f0fdfa" : "#7b8c83", opacity: preview && !highlighted ? 0.3 : 1,
+            boxShadow: highlighted > 0 ? "inset 0 0 0 2px #fbbf24" : undefined }}>
+          {selected > 0 && <span className="pointer-events-none absolute inset-y-0 left-0 opacity-50" style={{ width: `${visibleWeight * 100}%`, background: bg }} />}
+          {highlighted > 0 && <span className="pointer-events-none absolute inset-y-0 left-0 bg-amber-300/30" style={{ width: `${highlighted / available.length * 100}%` }} />}
           <span className="pointer-events-none relative">{label}</span>
           <span className="pointer-events-none relative text-[8px] opacity-70">{heatmap && strength !== null ? pct(strength) : selected > 0 ? selected.toFixed(1) : "·"}</span>
         </button>;
@@ -133,9 +139,10 @@ function ComparisonCards() {
   </section>;
 }
 
-function ComparisonStats({ ranges, board, mask, filters, setFilters }: {
+function ComparisonStats({ ranges, board, mask, filters, setFilters, onPreview }: {
   ranges: Record<Side, Range>; board: Card[]; mask: bigint; filters: Record<Side, Filters>;
   setFilters: (side: Side, value: Filters) => void;
+  onPreview: (preview: CategoryPreview | null) => void;
 }) {
   const bd = { hero: breakdownRange(ranges.hero, board, mask), villain: breakdownRange(ranges.villain, board, mask) };
   if (board.length < 3) return <section className={BOX}><h2 className="font-semibold">Попадания в борд</h2><p className="mt-2 text-sm text-neutral-500">Выберите флоп, чтобы сравнить готовые руки и дро.</p></section>;
@@ -144,26 +151,31 @@ function ComparisonStats({ ranges, board, mask, filters, setFilters }: {
     <div className="mb-2 grid grid-cols-[minmax(100px,1fr)_1fr_1fr] gap-3 text-xs text-neutral-500"><span>Категория</span><span className="text-emerald-400">Hero</span><span className="text-sky-400">Villain</span></div>
     {[...MADE_ORDER, ...DRAW_ORDER].map((key) => {
       const made = MADE_ORDER.includes(key as MadeCategory);
-      return <div key={key} className="grid grid-cols-[minmax(100px,1fr)_1fr_1fr] items-center gap-3 border-t border-white/5 py-1 text-[11px]">
+      return <div key={key} className="grid grid-cols-[minmax(100px,1fr)_1fr_1fr] items-center gap-3 border-t border-white/5 py-1 text-[11px]"
+        onMouseEnter={() => onPreview({ category: key })} onMouseLeave={() => onPreview(null)}>
         <span className="text-neutral-400">{made ? MADE_LABELS[key as MadeCategory] : DRAW_LABELS[key as DrawType]}</span>
         {(["hero", "villain"] as const).map((side) => {
           const count = made ? bd[side].made[key as MadeCategory] : bd[side].draws[key as DrawType];
           const share = bd[side].total ? count / bd[side].total : 0;
           const selected = made ? filters[side].made.includes(key as MadeCategory) : filters[side].draws.includes(key as DrawType);
-          return <button key={side} aria-pressed={selected} aria-label={`${side}: ${made ? MADE_LABELS[key as MadeCategory] : DRAW_LABELS[key as DrawType]}`} title={`${side}: ${count.toFixed(2)} взвешенных комбо. Нажмите для фильтрации.`}
-            className={`relative overflow-hidden rounded px-2 py-1 text-right tabular-nums ${selected ? "ring-1 ring-white/60" : "hover:bg-white/5"}`}
-            onClick={() => {
+          return <label key={side} title={`${side}: ${count.toFixed(2)} взвешенных комбо. Выберите для фильтрации.`}
+            onMouseEnter={() => onPreview({ category: key, side })} onMouseLeave={() => onPreview({ category: key })}
+            className={`relative flex cursor-pointer items-center gap-1 overflow-hidden rounded px-1 py-1 tabular-nums ${selected ? "ring-1 ring-white/60" : "hover:bg-white/5"}`}>
+            <span className="pointer-events-none absolute inset-y-0 left-0 opacity-20" style={{ width: pct(share), background: COLOR[side] }} />
+            <input type="checkbox" checked={selected} aria-label={`${side}: ${made ? MADE_LABELS[key as MadeCategory] : DRAW_LABELS[key as DrawType]}`}
+              className="relative shrink-0 accent-emerald-400" style={{ accentColor: COLOR[side] }}
+              onFocus={() => onPreview({ category: key, side })} onBlur={() => onPreview(null)}
+              onChange={() => {
               const f = filters[side];
               setFilters(side, made ? { ...f, made: selected ? f.made.filter((k) => k !== key) : [...f.made, key as MadeCategory] }
                 : { ...f, draws: selected ? f.draws.filter((k) => k !== key) : [...f.draws, key as DrawType] });
-            }}>
-            <span className="absolute inset-y-0 left-0 opacity-20" style={{ width: pct(share), background: COLOR[side] }} />
-            <span className="relative">{selected ? "✓ " : ""}{pct(share)} <span className="text-neutral-500">· {count.toFixed(1)}</span></span>
-          </button>;
+            }} />
+            <span className="relative flex-1 text-right">{pct(share)} <span className="text-neutral-500">· {count.toFixed(1)}</span></span>
+          </label>;
         })}
       </div>;
     })}
-    <p className="mt-3 text-[11px] text-neutral-500">Доли от исходного диапазона с учётом борда и мёртвых карт. Выбранные категории объединяются по «ИЛИ» и фильтруют эквити. Дро пересекаются с готовыми руками.</p>
+    <p className="mt-3 text-[11px] text-neutral-500">Наведите на категорию — её комбо подсветятся жёлтым. Галочки оставляют в матрице и расчёте объединение выбранных категорий («ИЛИ»). Снимите все галочки, чтобы вернуть исходный диапазон. Доли указаны от исходного диапазона; дро могут пересекаться с готовыми руками.</p>
   </section>;
 }
 
@@ -207,12 +219,26 @@ export function RangeComparison() {
   const [heatmap, setHeatmap] = useState(false);
   const [nextCards, setNextCards] = useState(false);
   const [run, setRun] = useState(0);
+  const [hovered, setHovered] = useState<CategoryPreview | null>(null);
   const mask = cardsToMask([...board, ...dead]);
   const filtered = useMemo(() => {
     const apply = (side: Side) => board.length >= 3 && hasFilters(filters[side])
       ? new Range(filterRange(ranges[side], board, mask, new Set(filters[side].made), new Set(filters[side].draws))) : ranges[side];
     return { hero: apply("hero"), villain: apply("villain") };
   }, [ranges, rev, board, mask, filters]);
+  const previews = useMemo(() => {
+    if (!hovered || board.length < 3) return {};
+    const made = MADE_ORDER.includes(hovered.category as MadeCategory);
+    const label = made ? MADE_LABELS[hovered.category as MadeCategory] : DRAW_LABELS[hovered.category as DrawType];
+    const result: Partial<Record<Side, { range: Range; label: string }>> = {};
+    for (const side of ["hero", "villain"] as const) {
+      if (hovered.side && hovered.side !== side) continue;
+      result[side] = { label, range: new Range(filterRange(ranges[side], board, mask,
+        new Set(made ? [hovered.category as MadeCategory] : []),
+        new Set(made ? [] : [hovered.category as DrawType]))) };
+    }
+    return result;
+  }, [hovered, ranges, rev, board, mask]);
   const validBoard = board.length === 0 || board.length >= 3;
   const signature = `${rev}|${board}|${dead}|${JSON.stringify(filters)}|${run}`;
   const { result, computing, error } = useEquity(validBoard ? filtered.hero : new Range(), filtered.villain, board, dead, signature, { samples, detail: true, nextCards });
@@ -232,14 +258,14 @@ export function RangeComparison() {
         <p className="text-[11px] text-neutral-500">{result.exact ? "Точный перебор" : "Оценка Monte Carlo"} · {result.samples.toLocaleString("ru-RU")} раскладов · Ничья делится поровну.</p>
       </>}
     </div>
-    <div className="grid gap-4 lg:grid-cols-2">
-      <RangeEditor side="hero" mask={mask} filtered={filtered.hero} eq={result?.combos?.a} heatmap={heatmap} />
-      <RangeEditor side="villain" mask={mask} filtered={filtered.villain} eq={result?.combos?.b} heatmap={heatmap} />
+    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(340px,1fr)]">
+      <div className="grid gap-4 md:grid-cols-2 xl:sticky xl:top-4">
+        <RangeEditor side="hero" mask={mask} filtered={filtered.hero} preview={previews.hero} eq={result?.combos?.a} heatmap={heatmap} />
+        <RangeEditor side="villain" mask={mask} filtered={filtered.villain} preview={previews.villain} eq={result?.combos?.b} heatmap={heatmap} />
+      </div>
+      <ComparisonStats ranges={ranges} board={board} mask={mask} filters={filters} setFilters={setFilter} onPreview={setHovered} />
     </div>
-    <div className="grid items-start gap-4 lg:grid-cols-2">
-      <ComparisonStats ranges={ranges} board={board} mask={mask} filters={filters} setFilters={setFilter} />
-      <EquityDetails result={result} />
-    </div>
+    <EquityDetails result={result} />
     <section className={BOX}>
       <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">Следующая карта · Hotness</h2><label className="text-xs text-neutral-400"><input type="checkbox" checked={nextCards} onChange={(e) => setNextCards(e.target.checked)} className="mr-2" />Рассчитать все карты</label></div>
       <p className="mt-2 text-xs text-neutral-500">На флопе и тёрне: эквити Hero после выхода каждой карты. Зелёный — рост, красный — снижение. Веса текущего отфильтрованного диапазона фиксированы; новые блокеры учитываются. «≈» — оценка по 10 000 раскладов.</p>
