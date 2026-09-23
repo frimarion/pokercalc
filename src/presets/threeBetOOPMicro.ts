@@ -176,7 +176,7 @@ export const THREEBET_OOP_MICRO_PRESETS: RangePreset[] = [
         kind: "raise",
         label: "3бет",
         always: [
-          "AA", "KK", "QQ", "JJ", "TT",
+          "AA", "KK", "QQ", "JJ", "TT", "99",
           "AKs", "AQs", "AJs", "ATs",
           "A5s", "A4s", "A3s", "A2s",
           "KQs", "KJs", "KTs",
