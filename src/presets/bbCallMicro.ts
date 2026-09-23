@@ -161,7 +161,7 @@ export const BB_CALL_MICRO_PRESETS: RangePreset[] = [
     group: "BBCALLMICRO",
     position: "BB vs BU",
     title: "Колл BB микро · vs BU",
-    subtitle: "BB — колл опена BU: зелёный против 3bb, жёлтый добавляется против 2.5bb, оранжевый — против 2bb, фиолетовый — клетка пополам с 3бетом",
+    subtitle: "BB — колл опена BU: зелёный против 3bb, оранжевый — против 2bb, фиолетовый — клетка пополам с 3бетом",
     actions: [
       {
         kind: "call",
@@ -177,19 +177,10 @@ export const BB_CALL_MICRO_PRESETS: RangePreset[] = [
           "76s", "75s",
           "65s", "64s",
           "54s", "53s",
-          "A9o", "A8o",
+          "AJo", "A9o", "A8o",
           "KQo",
         ],
         situational: [],
-      },
-      {
-        kind: "call",
-        label: "колл vs 2.5bb",
-        color: "yellow",
-        always: [],
-        situational: [
-          "AJo",
-        ],
       },
       {
         kind: "call",
@@ -206,7 +197,7 @@ export const BB_CALL_MICRO_PRESETS: RangePreset[] = [
           "52s",
           "43s", "42s",
           "32s",
-          "A7o", "A5o",
+          "A7o", "A6o", "A5o",
           "K9o",
           "Q9o",
           "J9o",
