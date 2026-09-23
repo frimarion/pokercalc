@@ -457,37 +457,33 @@ describe("Колл BB — кэш микро", () => {
   });
 
   it("чем позднее опенер, тем шире колл", () => {
-    const [utg, co, bu, sb] = ["utg-mp", "co", "bu", "sb"].map(
+    const [utg, co, bu] = ["utg-mp", "co", "bu"].map(
       (k) => presetById(`bbcall-micro-vs-${k}`)!,
     );
     expect(pct(co)).toBeGreaterThan(pct(utg));
     expect(pct(bu)).toBeGreaterThan(pct(co));
-    expect(pct(sb)).toBeGreaterThan(pct(bu));
   });
 
-  it("пересечение с 3бетом — ровно то, что в источнике", () => {
-    // Источник кладёт часть рук и в колл, и в 3бет. Список зафиксирован,
-    // чтобы правка любого из двух чартов не сдвинула его незаметно.
-    const OVERLAP: Record<string, string[]> = {
-      "utg-mp": ["AJs", "ATs", "KQs", "KJs", "KTs", "QJs", "QTs", "JTs", "AQo"],
-      co: ["TT", "AJs", "ATs", "KQs", "KJs", "KTs", "QJs", "QTs", "JTs", "AQo", "KJo", "QJo", "ATo", "KTo"],
-      bu: [
-        "TT", "KQs", "KJs", "KTs", "QJs", "QTs", "JTs", "J9s", "J8s", "J7s",
-        "T9s", "T8s", "T7s", "AQo", "ATo", "KJo", "KTo", "QJo", "QTo", "JTo",
-        "Q5s", "Q4s", "J6s", "J5s", "T6s",
-      ],
-      sb: [
-        "A3s", "A2s", "K5s", "K4s", "K3s", "K2s", "Q5s", "Q4s", "Q3s", "Q2s",
-        "A7o", "A6o", "A5o", "A4o", "A3o", "A2o", "K8o", "K7o",
-      ],
-    };
-    for (const [k, expected] of Object.entries(OVERLAP)) {
-      const call = presetRange(presetById(`bbcall-micro-vs-${k}`)!);
-      const raise = presetRange(presetById(`3betoop-micro-bb-vs-${k}`)!);
-      const both = GRID.flat()
-        .map((c) => c.label)
-        .filter((h) => call.handWeight(h) > 0 && raise.handWeight(h) > 0);
-      expect(both.sort(), k).toEqual([...expected].sort());
+  it("клетка, где есть и колл, и 3бет, делится 50/50", () => {
+    for (const k of ["utg-mp", "co", "bu"]) {
+      const call = presetById(`bbcall-micro-vs-${k}`)!;
+      const raise = presetById(`3betoop-micro-bb-vs-${k}`)!;
+      for (const cell of GRID.flat()) {
+        const c = handWeights(call, cell.label).call;
+        const r = handWeights(raise, cell.label).raise;
+        if (c > 0 && r > 0) {
+          expect([c, r], `${k}: ${cell.label}`).toEqual([0.5, 0.5]);
+        }
+      }
+    }
+  });
+
+  it("против SB колла нет — только 3бет", () => {
+    expect(presetById("bbcall-micro-vs-sb")).toBeUndefined();
+    const sb = presetById("3betoop-micro-bb-vs-sb")!;
+    // прежний 3бет и бывший колл-диапазон — оба внутри
+    for (const h of ["AA", "99", "22", "A5o", "32s", "JTo", "T8o"]) {
+      expect(handWeights(sb, h).raise, h).toBeGreaterThan(0);
     }
   });
 });

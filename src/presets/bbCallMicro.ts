@@ -9,9 +9,12 @@
 // Поэтому три веса — три отдельных действия kind "call" со своим цветом:
 // на вес это не влияет, а легенда называет сайзинг.
 //
-// Колл-чарты ПЕРЕСЕКАЮТСЯ с 3бетом (`3betoop-micro-bb-vs-*`): часть рук
-// источник кладёт в оба диапазона, у vs CO/BU местами по полному весу в
-// каждом. Это так в источнике, не ошибка оцифровки — см. OVERLAP в тесте.
+// Источник клал часть рук и в колл, и в 3бет (`3betoop-micro-bb-vs-*`), у
+// vs CO/BU местами по полному весу в каждом. По решению владельца чартов
+// такая клетка делится 50/50: 3бет 0.5 и колл 0.5, независимо от яруса
+// сайзинга. Эти руки вынесены в отдельное действие «колл — 50/50 с 3бетом».
+//
+// Против SB колла нет: BB там защищается только 3бетом.
 //
 // Экспортировано из FlopzillaPro range-строкой, TS сгенерирован скриптом.
 
@@ -23,13 +26,25 @@ export const BB_CALL_MICRO_PRESETS: RangePreset[] = [
     group: "BBCALLMICRO",
     position: "BB vs UTG,MP",
     title: "Колл BB микро · vs UTG/MP",
-    subtitle: "BB — колл опена UTG/MP: зелёный против 3bb, жёлтый добавляется против 2.5bb, оранжевый — против 2bb",
+    subtitle: "BB — колл опена UTG/MP: зелёный против 3bb, жёлтый добавляется против 2.5bb, оранжевый — против 2bb, фиолетовый — клетка пополам с 3бетом",
     actions: [
       {
         kind: "call",
         label: "колл vs 3bb",
         color: "green",
-        always: ["TT", "99", "88", "77", "66", "55", "44", "33", "22", "AJs", "ATs", "A9s", "A8s", "A7s", "KQs", "KJs", "KTs", "K9s", "QJs", "QTs", "Q9s", "JTs", "J9s", "T9s", "T8s", "98s", "97s", "87s", "76s", "65s", "54s", "AQo"],
+        always: [
+          "TT", "99", "88", "77", "66", "55", "44", "33", "22",
+          "A9s", "A8s", "A7s",
+          "K9s",
+          "Q9s",
+          "J9s",
+          "T9s", "T8s",
+          "98s", "97s",
+          "87s",
+          "76s",
+          "65s",
+          "54s",
+        ],
         situational: [],
       },
       {
@@ -37,7 +52,11 @@ export const BB_CALL_MICRO_PRESETS: RangePreset[] = [
         label: "колл vs 2.5bb",
         color: "yellow",
         always: [],
-        situational: ["K8s", "AJo", "KQo"],
+        situational: [
+          "K8s",
+          "AJo",
+          "KQo",
+        ],
       },
       {
         kind: "call",
@@ -45,7 +64,30 @@ export const BB_CALL_MICRO_PRESETS: RangePreset[] = [
         color: "orange",
         always: [],
         situational: [],
-        quarter: ["Q8s", "J8s", "86s", "75s", "64s", "53s", "43s", "ATo", "KJo"],
+        quarter: [
+          "Q8s",
+          "J8s",
+          "86s",
+          "75s",
+          "64s",
+          "53s",
+          "43s",
+          "ATo",
+          "KJo",
+        ],
+      },
+      {
+        kind: "call",
+        label: "колл — 50/50 с 3бетом",
+        color: "purple",
+        always: [],
+        situational: [
+          "AJs", "ATs",
+          "KQs", "KJs", "KTs",
+          "QJs", "QTs",
+          "JTs",
+          "AQo",
+        ],
       },
     ],
   },
@@ -54,21 +96,28 @@ export const BB_CALL_MICRO_PRESETS: RangePreset[] = [
     group: "BBCALLMICRO",
     position: "BB vs CO",
     title: "Колл BB микро · vs CO",
-    subtitle: "BB — колл опена CO: зелёный против 3bb, жёлтый добавляется против 2.5bb, оранжевый — против 2bb",
+    subtitle: "BB — колл опена CO: зелёный против 3bb, жёлтый добавляется против 2.5bb, оранжевый — против 2bb, фиолетовый — клетка пополам с 3бетом",
     actions: [
       {
         kind: "call",
         label: "колл vs 3bb",
         color: "green",
-        always: ["TT", "99", "88", "77", "66", "55", "44", "33", "22", "AJs", "ATs", "A9s", "A8s", "A7s", "A6s", "KQs", "KJs", "KTs", "K9s", "K8s", "K7s", "K6s", "QJs", "QTs", "Q9s", "Q8s", "JTs", "J9s", "J8s", "T9s", "T8s", "98s", "97s", "87s", "86s", "76s", "75s", "65s", "64s", "54s", "53s", "AQo", "AJo", "KQo"],
+        always: [
+          "99", "88", "77", "66", "55", "44", "33", "22",
+          "A9s", "A8s", "A7s", "A6s",
+          "K9s", "K8s", "K7s", "K6s",
+          "Q9s", "Q8s",
+          "J9s", "J8s",
+          "T9s", "T8s",
+          "98s", "97s",
+          "87s", "86s",
+          "76s", "75s",
+          "65s", "64s",
+          "54s", "53s",
+          "AJo",
+          "KQo",
+        ],
         situational: [],
-      },
-      {
-        kind: "call",
-        label: "колл vs 2.5bb",
-        color: "yellow",
-        always: [],
-        situational: ["KJo", "QJo"],
       },
       {
         kind: "call",
@@ -76,7 +125,34 @@ export const BB_CALL_MICRO_PRESETS: RangePreset[] = [
         color: "orange",
         always: [],
         situational: [],
-        quarter: ["Q7s", "Q6s", "Q5s", "Q4s", "J7s", "T7s", "96s", "85s", "74s", "43s", "ATo", "A9o", "KTo", "QTo", "JTo"],
+        quarter: [
+          "Q7s", "Q6s", "Q5s", "Q4s",
+          "J7s",
+          "T7s",
+          "96s",
+          "85s",
+          "74s",
+          "43s",
+          "A9o",
+          "QTo",
+          "JTo",
+        ],
+      },
+      {
+        kind: "call",
+        label: "колл — 50/50 с 3бетом",
+        color: "purple",
+        always: [],
+        situational: [
+          "TT",
+          "AJs", "ATs",
+          "KQs", "KJs", "KTs",
+          "QJs", "QTs",
+          "JTs",
+          "AQo", "ATo",
+          "KJo", "KTo",
+          "QJo",
+        ],
       },
     ],
   },
@@ -85,13 +161,25 @@ export const BB_CALL_MICRO_PRESETS: RangePreset[] = [
     group: "BBCALLMICRO",
     position: "BB vs BU",
     title: "Колл BB микро · vs BU",
-    subtitle: "BB — колл опена BU: зелёный против 3bb, жёлтый добавляется против 2.5bb, оранжевый — против 2bb",
+    subtitle: "BB — колл опена BU: зелёный против 3bb, жёлтый добавляется против 2.5bb, оранжевый — против 2bb, фиолетовый — клетка пополам с 3бетом",
     actions: [
       {
         kind: "call",
         label: "колл vs 3bb",
         color: "green",
-        always: ["TT", "99", "88", "77", "66", "55", "44", "33", "22", "A9s", "A8s", "A7s", "A6s", "KQs", "KJs", "KTs", "K9s", "K8s", "K7s", "K6s", "QJs", "QTs", "Q9s", "Q8s", "Q7s", "Q6s", "JTs", "J9s", "J8s", "J7s", "T9s", "T8s", "T7s", "98s", "97s", "87s", "86s", "76s", "75s", "65s", "64s", "54s", "53s", "AQo", "A9o", "A8o", "KQo"],
+        always: [
+          "99", "88", "77", "66", "55", "44", "33", "22",
+          "A9s", "A8s", "A7s", "A6s",
+          "K9s", "K8s", "K7s", "K6s",
+          "Q9s", "Q8s", "Q7s", "Q6s",
+          "98s", "97s",
+          "87s", "86s",
+          "76s", "75s",
+          "65s", "64s",
+          "54s", "53s",
+          "A9o", "A8o",
+          "KQo",
+        ],
         situational: [],
       },
       {
@@ -99,7 +187,9 @@ export const BB_CALL_MICRO_PRESETS: RangePreset[] = [
         label: "колл vs 2.5bb",
         color: "yellow",
         always: [],
-        situational: ["AJo", "ATo", "KJo", "KTo", "QJo", "QTo", "JTo"],
+        situational: [
+          "AJo",
+        ],
       },
       {
         kind: "call",
@@ -107,30 +197,38 @@ export const BB_CALL_MICRO_PRESETS: RangePreset[] = [
         color: "orange",
         always: [],
         situational: [],
-        quarter: ["Q5s", "Q4s", "J6s", "J5s", "J4s", "T6s", "96s", "85s", "74s", "63s", "52s", "43s", "42s", "32s", "A7o", "A5o", "K9o", "Q9o", "J9o", "T9o"],
-      },
-    ],
-  },
-  {
-    id: "bbcall-micro-vs-sb",
-    group: "BBCALLMICRO",
-    position: "BB vs SB",
-    title: "Колл BB микро · vs SB",
-    subtitle: "BB — колл опена SB: зелёный против 3bb, жёлтый добавляется против 2.5bb",
-    actions: [
-      {
-        kind: "call",
-        label: "колл vs 3bb",
-        color: "green",
-        always: ["88", "77", "66", "55", "44", "33", "22", "A9s", "A8s", "A7s", "A6s", "A3s", "A2s", "K9s", "K8s", "K7s", "K6s", "K5s", "K4s", "K3s", "K2s", "Q9s", "Q8s", "Q7s", "Q6s", "Q5s", "Q4s", "Q3s", "Q2s", "J9s", "J8s", "J7s", "T9s", "T8s", "T7s", "98s", "97s", "96s", "95s", "87s", "86s", "85s", "76s", "75s", "74s", "65s", "64s", "63s", "54s", "53s", "52s", "43s", "42s", "32s", "AJo", "ATo", "A9o", "A8o", "KQo", "KJo", "KTo", "QJo", "QTo", "JTo"],
-        situational: [],
+        quarter: [
+          "J4s",
+          "96s",
+          "85s",
+          "74s",
+          "63s",
+          "52s",
+          "43s", "42s",
+          "32s",
+          "A7o", "A5o",
+          "K9o",
+          "Q9o",
+          "J9o",
+          "T9o",
+        ],
       },
       {
         kind: "call",
-        label: "колл vs 2.5bb",
-        color: "yellow",
+        label: "колл — 50/50 с 3бетом",
+        color: "purple",
         always: [],
-        situational: ["A7o", "A6o", "A5o", "A4o", "A3o", "A2o", "K9o", "K8o", "K7o", "Q9o", "Q8o", "J9o", "J8o", "T9o", "T8o"],
+        situational: [
+          "TT",
+          "KQs", "KJs", "KTs",
+          "QJs", "QTs", "Q5s", "Q4s",
+          "JTs", "J9s", "J8s", "J7s", "J6s", "J5s",
+          "T9s", "T8s", "T7s", "T6s",
+          "AQo", "ATo",
+          "KJo", "KTo",
+          "QJo", "QTo",
+          "JTo",
+        ],
       },
     ],
   },
