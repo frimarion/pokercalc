@@ -13,7 +13,7 @@ import {
   declinesByCheck,
 } from "../presets/quiz";
 import { PresetGroup, RangePreset, presetById } from "../presets";
-import { SceneActionKind, sceneFor } from "../presets/scene";
+import { Scene, SceneActionKind, sceneFor } from "../presets/scene";
 import { HeroAction, PokerTable } from "./PokerTable";
 import { SuitIndex } from "../engine/cards";
 
@@ -69,6 +69,26 @@ function sceneKindOf(preset: RangePreset, answer: QuizAnswer): SceneActionKind {
   }
 }
 
+/**
+ * Сколько фишек кладёт герой своим ответом — и кладёт ли вообще. Размер
+ * однозначен только у колла (повторяет самую крупную ставку за столом и
+ * упирается в свой стек) и у олл-ина (весь стек). Размер рейза задаёт чарт,
+ * а у изолейта их два — угадывать его нечем, такой ход остаётся облаком.
+ */
+function heroBet(scene: Scene, kind: SceneActionKind): number | undefined {
+  if (kind !== "call" && kind !== "push") return undefined;
+  const hero = scene.seats.find((x) => x.id === scene.heroId);
+  if (!hero) return undefined;
+  // Анте платит BB и платит из стека: больше остатка он не поставит.
+  const avail = hero.stack - (hero.pos === "BB" ? scene.ante : 0);
+  if (kind === "push") return avail;
+  const max = Math.max(0, ...scene.steps.map((st) => st.amount ?? 0));
+  return Math.min(max, avail);
+}
+
+/** Частоту показываем только у смешанных линий: «100%» рядом с «0%» ничего не сообщает. */
+const isMixed = (w: number) => w > 0.01 && w < 0.99;
+
 export function Trainer() {
   // Кэш и MTT не смешиваются в одном прогоне: чарты разные и по сайзингам, и
   // по глубине стека, а вопрос показывает только руку и спот — вперемешку
@@ -79,8 +99,6 @@ export function Trainer() {
   const [question, setQuestion] = useState<Question | null>(null);
   const [cards, setCards] = useState<{ rank: string; suit: SuitIndex }[]>([]);
   const [answered, setAnswered] = useState<QuizAnswer | null>(null);
-  // Номер раздачи: по нему стол переигрывает сцену даже когда чарт тот же.
-  const [deal, setDeal] = useState(0);
   const [score, setScore] = useState({ right: 0, total: 0, streak: 0, best: 0 });
 
   const pool = useMemo(
@@ -97,7 +115,6 @@ export function Trainer() {
     setQuestion(q);
     setCards(q ? dealHand(q.hand) : []);
     setAnswered(null);
-    setDeal((n) => n + 1);
   };
 
   const answer = (key: QuizAnswer) => {
@@ -140,37 +157,55 @@ export function Trainer() {
     ask(poolOf(groups));
   };
 
-  const pctRight = score.total > 0 ? (score.right / score.total) * 100 : 0;
+  const accuracy = score.total > 0 ? Math.round((score.right / score.total) * 100) : null;
   const correctKeys = question
     ? question.spot.answers.filter((a) => isCorrect(question, a.key)).map((a) => a.key)
     : [];
   const wasRight = answered !== null && correctKeys.includes(answered);
   const edges = question ? actionEdges(question.preset, question.hand) : [];
   const scene = useMemo(() => (question ? sceneFor(question.preset) : null), [question]);
-  const heroAction: HeroAction | null =
-    question && answered
-      ? {
-          label: question.spot.answers.find((a) => a.key === answered)?.label ?? answered,
-          kind: sceneKindOf(question.preset, answered),
-          correct: wasRight,
-        }
-      : null;
+  const heroAction: HeroAction | null = (() => {
+    if (!question || !answered || !scene) return null;
+    const kind = sceneKindOf(question.preset, answered);
+    return {
+      label: question.spot.answers.find((a) => a.key === answered)?.label ?? answered,
+      kind,
+      correct: wasRight,
+      amount: heroBet(scene, kind),
+    };
+  })();
 
   return (
     <div className="mx-auto flex max-w-[860px] flex-col gap-3 sm:gap-4">
-      {/* Что тренируем: сначала формат, потом группы внутри него. На телефоне
-          список спотов занимал пол-экрана над вопросом, поэтому он свёрнут:
-          развернуть его нужно раз за сессию, а стол — каждую раздачу. */}
-      <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-[#0d1210] px-3 py-2">
+      {/* Счёт: серия — главная цифра, как в Doyle Academy. */}
+      <div className="flex items-center gap-4 rounded-xl border border-white/10 bg-[#0d1210] px-4 py-3">
+        <div className="min-w-[62px] text-center">
+          <div className="text-3xl font-black leading-none text-emerald-300">{score.streak}</div>
+          <div className="mt-1 text-[9.5px] uppercase tracking-widest text-neutral-500">серия</div>
+        </div>
+        <div className="flex flex-1 gap-4">
+          {[
+            [score.best, "рекорд"],
+            [accuracy === null ? "—" : `${accuracy}%`, "точность"],
+            [score.total, "ответов"],
+          ].map(([v, cap]) => (
+            <div key={cap} className="flex flex-col gap-0.5">
+              <b className="text-base font-extrabold text-neutral-100">{v}</b>
+              <span className="text-[9.5px] uppercase tracking-wider text-neutral-500">{cap}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Что тренируем: формат и споты внутри него. Споты свёрнуты — их
+          трогают раз за сессию, а стол каждую раздачу. */}
+      <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-[11px] uppercase tracking-wider text-neutral-500">
-            Формат
-          </span>
           {TRAINER_SECTIONS.map((s) => (
             <button
               key={s.key}
               onClick={() => switchSection(s)}
-              className={`rounded-md px-3 py-1.5 text-[11px] font-bold transition sm:px-2.5 sm:py-1 ${
+              className={`rounded-full px-3 py-1.5 text-[11px] font-bold transition ${
                 s.key === section.key
                   ? "bg-emerald-500 text-black"
                   : "border border-white/10 text-neutral-400 hover:bg-white/5"
@@ -180,58 +215,29 @@ export function Trainer() {
             </button>
           ))}
           <span className="ml-1 hidden text-[11px] text-neutral-600 sm:inline">{section.note}</span>
-          <button
-            onClick={() => setSpotsOpen((v) => !v)}
-            className="ml-auto rounded-md px-2 py-1.5 text-[11px] font-semibold text-neutral-400 transition hover:bg-white/5 sm:hidden"
-          >
-            Споты {enabled.size}/{section.groups.length} {spotsOpen ? "▲" : "▼"}
-          </button>
         </div>
-        <div
-          className={`${spotsOpen ? "flex" : "hidden"} flex-wrap items-center gap-1.5 sm:flex`}
+        <button
+          onClick={() => setSpotsOpen((v) => !v)}
+          className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-xs font-semibold text-neutral-400 transition hover:bg-white/10"
         >
-          <span className="mr-1 hidden text-[11px] uppercase tracking-wider text-neutral-500 sm:inline">
-            Споты
-          </span>
-          {section.groups.map((g) => (
-            <button
-              key={g}
-              onClick={() => toggleGroup(g)}
-              className={`rounded-md px-2 py-1.5 text-[11px] font-semibold transition sm:py-1 ${
-                enabled.has(g)
-                  ? "bg-emerald-500 text-black"
-                  : "border border-white/10 text-neutral-400 hover:bg-white/5"
-              }`}
-            >
-              {sectionGroupLabel(g)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Счёт */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-white/10 bg-[#0d1210] px-3 py-2 text-xs sm:px-4">
-        <span className="text-neutral-400">
-          Верно <span className="font-bold text-neutral-100">{score.right}</span> из{" "}
-          <span className="font-bold text-neutral-100">{score.total}</span>
-        </span>
-        <span
-          className={
-            pctRight >= 80 ? "text-emerald-400" : pctRight >= 60 ? "text-amber-400" : "text-rose-400"
-          }
-        >
-          {score.total > 0 ? `${pctRight.toFixed(0)}%` : "—"}
-        </span>
-        <span className="text-neutral-500">
-          серия {score.streak} · рекорд {score.best}
-        </span>
-        {score.total > 0 && (
-          <button
-            onClick={() => setScore({ right: 0, total: 0, streak: 0, best: 0 })}
-            className="ml-auto rounded px-1.5 py-0.5 text-[10px] text-neutral-500 transition hover:bg-white/5 hover:text-neutral-300"
-          >
-            ↺ сбросить счёт
-          </button>
+          Споты: {enabled.size} из {section.groups.length} {spotsOpen ? "▴" : "▾"}
+        </button>
+        {spotsOpen && (
+          <div className="flex flex-wrap gap-1.5">
+            {section.groups.map((g) => (
+              <button
+                key={g}
+                onClick={() => toggleGroup(g)}
+                className={`rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
+                  enabled.has(g)
+                    ? "bg-emerald-500 text-black"
+                    : "border border-white/10 text-neutral-400 hover:bg-white/5"
+                }`}
+              >
+                {sectionGroupLabel(g)}
+              </button>
+            ))}
+          </div>
         )}
       </div>
 
@@ -254,15 +260,8 @@ export function Trainer() {
           <div className="flex flex-col gap-4">
             <p className="text-sm text-neutral-300">{question.spot.situation}</p>
 
-            {/* Стол: места, чужие действия по очереди, наша рука на руках */}
-            {scene && (
-              <PokerTable
-                scene={scene}
-                cards={cards}
-                heroAction={heroAction}
-                questionKey={String(deal)}
-              />
-            )}
+            {/* Стол сразу в состоянии решения: чужие ходы уже на сукне */}
+            {scene && <PokerTable scene={scene} cards={cards} heroAction={heroAction} />}
 
             <div className="text-center text-sm font-bold text-neutral-400">
               Ваша рука: <span className="text-neutral-100">{question.hand}</span>
@@ -288,7 +287,7 @@ export function Trainer() {
                     className={`min-h-11 min-w-[7rem] flex-1 rounded-lg px-4 py-2 text-sm font-bold transition sm:min-h-0 sm:flex-none ${cls}`}
                   >
                     {a.label}
-                    {answered && (
+                    {answered && isMixed(question.weights[a.key]) && (
                       <span className="ml-2 text-xs font-normal opacity-80">
                         {Math.round(question.weights[a.key] * 100)}%
                       </span>
@@ -312,7 +311,10 @@ export function Trainer() {
                   По чарту «{question.preset.title}» рука {question.hand} играется так:{" "}
                   {question.spot.answers
                     .filter((a) => question.weights[a.key] > 0.01)
-                    .map((a) => `${a.label.toLowerCase()} ${Math.round(question.weights[a.key] * 100)}%`)
+                    .map((a) => {
+                      const w = question.weights[a.key];
+                      return a.label.toLowerCase() + (isMixed(w) ? ` ${Math.round(w * 100)}%` : "");
+                    })
                     .join(", ")}
                   .
                 </div>

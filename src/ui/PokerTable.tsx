@@ -1,19 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Scene, SceneActionKind, SceneSeat, SceneStep, potAfter } from "../presets/scene";
+import { CSSProperties, useMemo } from "react";
+import { Scene, SceneActionKind, SceneSeat, SceneStep } from "../presets/scene";
 import { SUIT_SYMBOLS, SuitIndex } from "../engine/cards";
 import { suitColor } from "./colors";
 import { useIsCompact } from "./useMedia";
-
-/** Пауза между ходами соперников, мс. */
-const STEP_MS = 520;
-/** Блайнды выставляются быстрее: это не решение, а формальность. */
-const BLIND_MS = 200;
 
 export interface HeroAction {
   label: string;
   kind: SceneActionKind;
   /** Верно ли сыграно — красит фишку и облако. Null, пока не проверено. */
   correct: boolean | null;
+  /** Сколько фишек кладёт герой — только когда размер однозначен (колл, пуш). */
+  amount?: number;
 }
 
 const KIND_STYLE: Record<SceneActionKind, { bg: string; text: string }> = {
@@ -66,10 +63,56 @@ function fmtBb(v: number): string {
   return String(Math.round(v * 10) / 10);
 }
 
-function Chips({ amount, tone, compact }: { amount: number; tone: string; compact: boolean }) {
+// Размер хода лежит фишками на сукне, и в облаке он лишний: «Рейз 2-2.2bb»
+// рядом с «2.2bb» читается как два разных числа. Срезаем размер только у
+// ходов со ставкой — у них фишки и есть; «Фолд» и «Лимп» остаются как есть.
+const STEP_SIZE_RE = /\s+\d+(?:[.,]\d+)?(?:\s*-\s*\d+(?:[.,]\d+)?)?\s*bb$/i;
+
+function stepLabel(step: SceneStep): string {
+  return step.amount === undefined ? step.label : step.label.replace(STEP_SIZE_RE, "");
+}
+
+type ChipsSide = "n" | "ne" | "nw" | "s" | "e" | "w";
+
+/**
+ * Ставка лежит на сукне со стороны банка, как за живым столом, а не под
+ * картами игрока: нижней половине стола — над плашкой, верхним боковым —
+ * сбоку, самому верхнему — под плашкой. Простое «всегда к центру» не годится:
+ * соседи по одному борту (SB и BB) сводят фишки в одну точку, а соседи героя
+ * кладут их прямо на его карты.
+ */
+function chipsSide(index: number, heroIndex: number, n: number): ChipsSide {
+  const rel = (index - heroIndex + n) % n;
+  const angle = Math.PI / 2 + (rel * 2 * Math.PI) / n;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const lateral = Math.abs(cos) > 0.5;
+  if (sin > 0.15) return lateral ? (cos < 0 ? "ne" : "nw") : "n";
+  return lateral ? (cos < 0 ? "e" : "w") : "s";
+}
+
+/** Где висят фишки относительно места. С облаком хода нижние поднимаются над ним. */
+function chipsStyle(side: ChipsSide, hasBubble: boolean): CSSProperties {
+  switch (side) {
+    case "n":
+      return { bottom: "100%", left: "50%", transform: `translate(-50%, ${hasBubble ? -24 : -4}px)` };
+    case "ne":
+      return { left: "100%", top: 0, transform: `translate(-4px, ${hasBubble ? -40 : -22}px)` };
+    case "nw":
+      return { right: "100%", top: 0, transform: `translate(4px, ${hasBubble ? -40 : -22}px)` };
+    case "s":
+      return { top: "100%", left: "50%", transform: "translate(-50%, 6px)" };
+    case "e":
+      return { left: "100%", top: "50%", transform: "translate(5px, -50%)" };
+    case "w":
+      return { right: "100%", top: "50%", transform: "translate(-5px, -50%)" };
+  }
+}
+
+function Chips({ amount, tone, compact }: { amount: string; tone: string; compact: boolean }) {
   return (
     <div
-      className={`pc-pop flex items-center gap-1 rounded-full bg-black/60 px-1.5 py-0.5 font-bold shadow ${
+      className={`pc-pop flex items-center gap-1 whitespace-nowrap rounded-full bg-black/60 px-1.5 py-0.5 font-bold shadow ${
         compact ? "text-[9px]" : "text-[10px]"
       }`}
     >
@@ -123,129 +166,73 @@ function CardBacks({ compact }: { compact: boolean }) {
   );
 }
 
+/**
+ * Стол рисуется сразу в состоянии решения, без проигрывания чужих ходов.
+ *
+ * Раньше ходы выкладывались по очереди раз в полсекунды — в Doyle Academy
+ * это убрали первым: семь «Фолдов» до героя стоили трёх секунд ожидания на
+ * каждом вопросе. Что было до героя, видно и так: облака ходов и фишки на
+ * сукне остаются на местах.
+ */
 export function PokerTable({
   scene,
   cards,
   heroAction,
-  /** Меняется на каждый новый вопрос — по нему сцена играется заново. */
-  questionKey,
 }: {
   scene: Scene;
   cards: { rank: string; suit: SuitIndex }[];
   heroAction: HeroAction | null;
-  questionKey: string;
 }) {
-  const [shown, setShown] = useState(0);
-  const timer = useRef<number | null>(null);
   const compact = useIsCompact();
 
-  const reduced =
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-
-  useEffect(() => {
-    if (reduced) {
-      setShown(scene.steps.length);
-      return;
-    }
-    setShown(0);
-    if (scene.steps.length === 0) return;
-    let i = 0;
-    const tick = () => {
-      i += 1;
-      setShown(i);
-      if (i < scene.steps.length) {
-        timer.current = window.setTimeout(
-          tick,
-          scene.steps[i].kind === "blind" ? BLIND_MS : STEP_MS,
-        );
-      }
-    };
-    timer.current = window.setTimeout(tick, scene.steps[0].kind === "blind" ? BLIND_MS : 320);
-    return () => {
-      if (timer.current !== null) window.clearTimeout(timer.current);
-    };
-    // questionKey — тот самый «новый вопрос»: сцена одного спота переигрывается
-    // и при повторе того же чарта с другой рукой.
-  }, [questionKey, scene, reduced]);
-
-  /** Ответ игрока обрывает проигрывание: стол сразу в состоянии решения. */
-  useEffect(() => {
-    if (!heroAction) return;
-    if (timer.current !== null) window.clearTimeout(timer.current);
-    setShown(scene.steps.length);
-  }, [heroAction, scene.steps.length]);
-
-  const skip = () => {
-    if (timer.current !== null) window.clearTimeout(timer.current);
-    setShown(scene.steps.length);
-  };
-
-  const done = shown >= scene.steps.length;
-
-  /** Последнее показанное действие каждого места. */
+  /** Последнее действие каждого места. */
   const acted = useMemo(() => {
     const m = new Map<string, SceneStep>();
-    for (const s of scene.steps.slice(0, shown)) {
+    for (const s of scene.steps) {
       // Блайнд — не решение: его затирает любой последующий ход этого места.
       if (s.kind === "blind" && m.has(s.seat)) continue;
       m.set(s.seat, s);
     }
     return m;
-  }, [scene, shown]);
+  }, [scene]);
 
   const bets = useMemo(() => {
     const m = new Map<string, number>();
-    for (const s of scene.steps.slice(0, shown)) {
+    for (const s of scene.steps) {
       if (s.kind === "fold" || s.kind === "check" || s.amount === undefined) continue;
       m.set(s.seat, Math.max(m.get(s.seat) ?? 0, s.amount));
     }
+    // Своего хода в steps нет — фишки за героя кладём отдельно, когда размер
+    // его ставки известен.
+    if (heroAction?.amount !== undefined) {
+      m.set(scene.heroId, Math.max(m.get(scene.heroId) ?? 0, heroAction.amount));
+    }
     return m;
-  }, [scene, shown]);
+  }, [scene, heroAction]);
 
-  const pot = potAfter(scene.steps, shown, scene.ante);
+  // Банк: анте плюс самая крупная ставка каждого места — ставка «до суммы»
+  // не складывается с уже выставленным блайндом (как и в `potAfter`).
+  const pot = Math.round(([...bets.values()].reduce((a, b) => a + b, 0) + scene.ante) * 10) / 10;
   /** Анте платит один BB — у него это списание сверх блайнда. */
   const anteOf = (s: SceneSeat) => (s.pos === "BB" ? scene.ante : 0);
   const heroIndex = Math.max(0, scene.seats.findIndex((s) => s.id === scene.heroId));
   const shape = tableShape(compact, scene.seats.length);
 
   return (
-    <div
-      onClick={done ? undefined : skip}
-      className={`relative w-full select-none ${done ? "" : "cursor-pointer"}`}
-      style={{ aspectRatio: shape.ratio }}
-    >
+    <div className="relative w-full select-none" style={{ aspectRatio: shape.ratio }}>
       {/* Сукно */}
       <div
         className="absolute rounded-[50%] border-4 border-[#0d1a15] bg-[radial-gradient(ellipse_at_center,#17352b_0%,#0f231d_70%,#0b1a15_100%)] shadow-[inset_0_0_60px_rgba(0,0,0,0.6)]"
         style={{ inset: shape.inset }}
       />
 
-      {/* Банк */}
-      {/* Чуть выше центра: снизу подступает облако действия героя, сверху —
-          фишки верхнего места, и на 36% банк уже налезал на них. */}
-      <div className="absolute left-1/2 top-[45%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1">
-        {pot > 0 && (
-          <>
-            <div className="flex gap-0.5">
-              {[0, 1, 2].map((i) => (
-                <span
-                  key={i}
-                  className="pc-pop inline-block h-2 w-2 rounded-full bg-amber-400/80 shadow"
-                />
-              ))}
-            </div>
-            <span className="text-[11px] font-bold text-amber-200/90">Банк {pot}bb</span>
-          </>
-        )}
-        {(scene.stack || scene.ante > 0) && (
-          <span className="text-[10px] uppercase tracking-wider text-emerald-300/50">
-            {[scene.stack && `стек ${scene.stack}`, scene.ante > 0 && `анте ${scene.ante}bb`]
-              .filter(Boolean)
-              .join(" · ")}
-          </span>
-        )}
-      </div>
+      {/* В центре только банк: блайнды и так видны фишками, а стек — в
+          подписи каждого места. */}
+      {pot > 0 && (
+        <div className="absolute left-1/2 top-[45%] -translate-x-1/2 -translate-y-1/2 whitespace-nowrap text-[13px] font-bold text-amber-200/90 [text-shadow:0_1px_4px_rgba(0,0,0,.75)]">
+          Банк {fmtBb(pot)}bb
+        </div>
+      )}
 
       {scene.seats.map((s, i) => {
         const pos = seatPos(i, heroIndex, scene.seats.length, shape);
@@ -254,6 +241,7 @@ export function PokerTable({
         const folded = step?.kind === "fold";
         const isHero = s.id === scene.heroId;
         const action = isHero && heroAction ? heroAction : null;
+        const hasBubble = !!((step && step.kind !== "blind") || action);
         const style =
           KIND_STYLE[action ? action.kind : step && step.kind !== "blind" ? step.kind : "blind"];
         // Свой ход красим по вердикту, чужие — по типу действия.
@@ -264,50 +252,55 @@ export function PokerTable({
               ? "bg-emerald-500 text-black"
               : "bg-rose-600 text-white"
           : `${style.bg} ${style.text}`;
+        // У героя `step` — это его блайнд, а фишки перед ним уже его ответ:
+        // красить их серым «как блайнд» значит спорить с облаком над ними.
+        const tone =
+          action?.amount !== undefined
+            ? "bg-amber-400"
+            : step?.kind === "blind"
+              ? "bg-neutral-400"
+              : step?.kind === "limp"
+                ? "bg-sky-400"
+                : "bg-amber-400";
 
         return (
           <div
             key={s.id}
-            className="absolute flex flex-col items-center gap-1"
+            className="absolute flex flex-col items-center"
             // Место героя выше остальных (карты крупнее рубашек) и стоит у
-            // нижнего края — центрируй его как все, и фишки уедут под стол.
-            style={{ ...pos, transform: `translate(-50%, ${isHero ? "-72%" : "-50%"})` }}
+            // нижнего края — центрируй его как все, и карты уедут под стол.
+            style={{ ...pos, transform: `translate(-50%, ${isHero ? "-80%" : "-50%"})` }}
           >
-            {/* Облако действия — над местом */}
-            <div className={compact ? "h-4" : "h-5"}>
-              {(step && step.kind !== "blind") || action ? (
-                <span
-                  className={`pc-pop inline-block whitespace-nowrap rounded-full px-1.5 py-0.5 font-bold shadow ${
-                    compact ? "text-[9px]" : "px-2 text-[10px]"
-                  } ${bubbleClass}`}
-                >
-                  {action ? action.label : step!.label}
-                </span>
-              ) : null}
-            </div>
-
-            {/* Само место */}
             <div
-              className={`relative flex flex-col items-center gap-1 rounded-xl border transition-all duration-300 ${
+              className={`relative flex flex-col items-center gap-1 rounded-xl border ${
                 compact ? "gap-0.5 px-1.5 py-1" : "px-2.5 py-1.5"
               } ${
                 isHero
                   ? "border-emerald-400/70 bg-[#10201a] shadow-[0_0_18px_rgba(52,199,123,0.25)]"
                   : "border-white/10 bg-[#0e1512]"
-              } ${folded ? "opacity-30 grayscale" : ""} ${
-                isHero && !action && done ? "pc-turn" : ""
-              }`}
+              } ${folded ? "opacity-30 grayscale" : ""}`}
             >
+              {/* Облако хода висит над местом вне потока: резерв под него на
+                  каждом месте раздувал стол по вертикали. */}
+              {hasBubble && (
+                <div className="absolute bottom-full left-1/2 mb-1 -translate-x-1/2">
+                  <span
+                    className={`pc-pop inline-block whitespace-nowrap rounded-full px-1.5 py-0.5 font-bold shadow ${
+                      compact ? "text-[9px]" : "px-2 text-[10px]"
+                    } ${bubbleClass}`}
+                  >
+                    {action ? action.label : stepLabel(step!)}
+                  </span>
+                </div>
+              )}
               {s.id === scene.buttonId && <DealerButton />}
-              {/* Позиция и стек одной строкой, как в покерных клиентах: место
-                  и так выше остальных из-за карт, лишний ряд ему ни к чему. */}
+              {/* Позиция и стек одной строкой, как в покерных клиентах. */}
               <span
                 className={`flex items-baseline gap-1 whitespace-nowrap font-bold ${
                   compact ? "text-[10px]" : "text-[11px]"
                 } ${isHero ? "text-emerald-300" : s.exact ? "text-neutral-300" : "text-neutral-500"}`}
               >
                 {s.pos}
-                {isHero && !compact && " (вы)"}
                 <span
                   className={`font-semibold text-amber-200/60 ${compact ? "text-[8px]" : "text-[9px]"}`}
                 >
@@ -342,31 +335,18 @@ export function PokerTable({
               )}
             </div>
 
-            {/* Фишки перед местом */}
-            <div className={compact ? "h-3.5" : "h-4"}>
-              {bet !== undefined && !folded && (
-                <Chips
-                  compact={compact}
-                  amount={bet}
-                  tone={
-                    step?.kind === "blind"
-                      ? "bg-neutral-400"
-                      : step?.kind === "limp"
-                        ? "bg-sky-400"
-                        : "bg-amber-400"
-                  }
-                />
-              )}
-            </div>
+            {/* Фишки — вне потока, со стороны банка. */}
+            {bet !== undefined && !folded && (
+              <div
+                className="absolute z-10"
+                style={chipsStyle(chipsSide(i, heroIndex, scene.seats.length), hasBubble)}
+              >
+                <Chips compact={compact} amount={fmtBb(bet)} tone={tone} />
+              </div>
+            )}
           </div>
         );
       })}
-
-      {!done && (
-        <span className="absolute bottom-1 right-2 text-[10px] text-neutral-600">
-          клик — пропустить раздачу
-        </span>
-      )}
     </div>
   );
 }
