@@ -36,6 +36,7 @@ import {
   handFamily,
   familyLabel,
   actionEdges,
+  situationOf,
 } from "../src/presets/quiz";
 import { sceneFor } from "../src/presets/scene";
 import { gridCells } from "../src/engine/combos";
@@ -84,7 +85,9 @@ const charts = ALL_PRESETS.filter((p) => MTT_GROUPS.includes(p.group)).map((p) =
     // Спот и кнопки ответов задаёт quiz.ts — там же, где тесты. Чарт без
     // спота (все руки очевидны) в тренажёр не попадает, но в разделе «Чарты»
     // показывается, поэтому situation/answers необязательны.
-    situation: spot?.situation ?? null,
+    // Описание спота нужно и в разделе «Чарты», поэтому оно есть у любого
+    // чарта; кнопки ответа — только у тех, по которым тренажёр спрашивает.
+    situation: situationOf(p),
     answers: spot?.answers ?? null,
     actions: actionsOf(p),
     hands,
