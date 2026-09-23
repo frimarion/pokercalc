@@ -231,6 +231,10 @@ export function situationOf(p: RangePreset): string {
       const [heroSeat, openPart] = p.position.split(" vs ");
       return `Вы на ${heroSeat}, источник «кэш микро». ${openPart.replace(",", "/")} открыл рейзом, остальные сфолдили.`;
     }
+    case "BBCALLMICRO": {
+      const openPart = p.position.split(" vs ")[1];
+      return `Вы на BB, источник «кэш микро». ${openPart.replace(",", "/")} открыл рейзом 2–3bb, остальные сфолдили. Чем меньше опен, тем шире колл.`;
+    }
     case "DEF3BETIPMICRO":
       return `Вы открыли с ${p.position}, блайнд ответил 3бетом. Источник «кэш микро», вы в позиции.`;
     case "DEF3BETOOPMICRO":
@@ -424,6 +428,7 @@ export const TRAINER_SECTIONS: TrainerSection[] = [
       "RFIMICRO",
       "3BETIPMICRO",
       "3BETOOPMICRO",
+      "BBCALLMICRO",
       "DEF3BETIPMICRO",
       "DEF3BETOOPMICRO",
     ],

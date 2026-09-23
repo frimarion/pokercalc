@@ -20,6 +20,7 @@ import { BBDEF_PRESETS } from "./bbDefense";
 import { THREEBET_IP_PRESETS } from "./threeBetIP";
 import { THREEBET_IP_MICRO_PRESETS } from "./threeBetIPMicro";
 import { THREEBET_OOP_MICRO_PRESETS } from "./threeBetOOPMicro";
+import { BB_CALL_MICRO_PRESETS } from "./bbCallMicro";
 import { DEF3BETOOP_MICRO_PRESETS } from "./defenseVs3betMicro";
 import { DEF3BETIP_MICRO_PRESETS } from "./defenseVs3betIPMicro";
 import { DEF3BETIP_PRESETS, DEF3BETOOP_PRESETS } from "./defenseVs3bet";
@@ -49,6 +50,7 @@ export { BBDEF_PRESETS } from "./bbDefense";
 export { THREEBET_IP_PRESETS } from "./threeBetIP";
 export { THREEBET_IP_MICRO_PRESETS } from "./threeBetIPMicro";
 export { THREEBET_OOP_MICRO_PRESETS } from "./threeBetOOPMicro";
+export { BB_CALL_MICRO_PRESETS } from "./bbCallMicro";
 export { DEF3BETOOP_MICRO_PRESETS } from "./defenseVs3betMicro";
 export { DEF3BETIP_MICRO_PRESETS } from "./defenseVs3betIPMicro";
 export { DEF3BETIP_PRESETS, DEF3BETOOP_PRESETS } from "./defenseVs3bet";
@@ -110,7 +112,7 @@ export const FORMATS: Format[] = [
       {
         key: "micro",
         label: "Микро",
-        note: "6-max · «кэш микро», RFI, 3бет IP vs UTG/MP/CO и 3бет OOP с блайндов — остальные ответы не оцифрованы",
+        note: "6-max · «кэш микро», RFI, 3бет IP vs UTG/MP/CO, 3бет OOP с блайндов и колл BB — остальные ответы не оцифрованы",
         tree: RFI_MICRO_TREE,
       },
     ],
@@ -134,6 +136,7 @@ export const PRESET_GROUPS: { group: PresetGroup; presets: RangePreset[] }[] = [
   { group: "3BETIP", presets: THREEBET_IP_PRESETS },
   { group: "3BETIPMICRO", presets: THREEBET_IP_MICRO_PRESETS },
   { group: "3BETOOPMICRO", presets: THREEBET_OOP_MICRO_PRESETS },
+  { group: "BBCALLMICRO", presets: BB_CALL_MICRO_PRESETS },
   { group: "DEF3BETOOPMICRO", presets: DEF3BETOOP_MICRO_PRESETS },
   { group: "DEF3BETIPMICRO", presets: DEF3BETIP_MICRO_PRESETS },
   { group: "DEF3BETIP", presets: DEF3BETIP_PRESETS },

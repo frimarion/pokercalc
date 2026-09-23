@@ -23,6 +23,7 @@ import {
   presetWidthPct,
   BLINDS4BET_PRESETS,
   MTT_STACKS,
+  BB_CALL_MICRO_PRESETS,
 } from ".";
 import {
   QUIZ_SPOTS,
@@ -83,6 +84,9 @@ describe("пресеты Green Charts — общее", () => {
 
   it("AA всегда в игре и никогда не фолдится", () => {
     for (const p of ALL_PRESETS) {
+      // Колл BB «кэш микро» — это отдельный колл-чарт, AA лежит в соседнем
+      // 3бет-чарте того же спота, а здесь её нет по определению.
+      if (p.group === "BBCALLMICRO") continue;
       const w = handWeights(p, "AA");
       expect(w.raise + w.call, `${p.id}: AA разыгрывается лишь ${w.raise + w.call}`)
         .toBeCloseTo(1, 5);
@@ -101,7 +105,7 @@ describe("пресеты Green Charts — общее", () => {
       // Колл 4бета в позиции агрессивной линии не имеет вовсе: в источнике
       // диапазон 3бета просто раскрашен на «защищаемся / сдаём», 5бета там
       // нет, поэтому и рейз-действия в чарте нет — проверять нечего.
-      if (p.group === "DEF4BETIP") continue;
+      if (p.group === "DEF4BETIP" || p.group === "BBCALLMICRO") continue;
       const w = handWeights(p, "AA");
       const floor = p.group === "BLINDS4BET" ? 0.5 : 0.5001;
       expect(w.raise, `${p.id}: AA рейзится лишь ${w.raise}`).toBeGreaterThanOrEqual(floor);
@@ -433,6 +437,53 @@ describe("BB — защита", () => {
     const bb = BBDEF_PRESETS.find((p) => p.id === "bbdef-vs-bu-25")!;
     const sb = SB3BET_PRESETS.find((p) => p.id === "sb3bet-vs-bu")!;
     expect(pct(bb)).toBeGreaterThan(pct(sb));
+  });
+});
+
+describe("Колл BB — кэш микро", () => {
+  it("каждая рука стоит ровно в одном ярусе сайзинга", () => {
+    // Ярус (3bb / 2.5bb / 2bb) — это вес руки, и рука в двух ярусах сразу
+    // получила бы вес, которого в строке FlopzillaPro не было.
+    for (const p of BB_CALL_MICRO_PRESETS) {
+      const seen = new Set<string>();
+      for (const [h] of p.actions.flatMap((a) => [
+        ...a.always.map((x) => [x] as const),
+        ...partialWeights(a),
+      ])) {
+        expect(seen.has(h), `${p.id}: ${h} дважды`).toBe(false);
+        seen.add(h);
+      }
+    }
+  });
+
+  it("чем позднее опенер, тем шире колл", () => {
+    const [utg, co, bu] = ["utg-mp", "co", "bu"].map(
+      (k) => presetById(`bbcall-micro-vs-${k}`)!,
+    );
+    expect(pct(co)).toBeGreaterThan(pct(utg));
+    expect(pct(bu)).toBeGreaterThan(pct(co));
+  });
+
+  it("пересечение с 3бетом — ровно то, что в источнике", () => {
+    // Источник кладёт часть рук и в колл, и в 3бет. Список зафиксирован,
+    // чтобы правка любого из двух чартов не сдвинула его незаметно.
+    const OVERLAP: Record<string, string[]> = {
+      "utg-mp": ["AJs", "ATs", "KQs", "KJs", "KTs", "QJs", "QTs", "JTs", "AQo"],
+      co: ["TT", "AJs", "ATs", "KQs", "KJs", "KTs", "QJs", "QTs", "JTs", "AQo", "KJo", "QJo", "ATo", "KTo"],
+      bu: [
+        "TT", "KQs", "KJs", "KTs", "QJs", "QTs", "JTs", "J9s", "J8s", "J7s",
+        "T9s", "T8s", "T7s", "AQo", "ATo", "KJo", "KTo", "QJo", "QTo", "JTo",
+        "Q5s", "Q4s", "J6s", "J5s", "T6s",
+      ],
+    };
+    for (const [k, expected] of Object.entries(OVERLAP)) {
+      const call = presetRange(presetById(`bbcall-micro-vs-${k}`)!);
+      const raise = presetRange(presetById(`3betoop-micro-bb-vs-${k}`)!);
+      const both = GRID.flat()
+        .map((c) => c.label)
+        .filter((h) => call.handWeight(h) > 0 && raise.handWeight(h) > 0);
+      expect(both.sort(), k).toEqual([...expected].sort());
+    }
   });
 });
 

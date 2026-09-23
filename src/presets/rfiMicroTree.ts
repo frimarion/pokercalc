@@ -1,5 +1,5 @@
 // Ветка событий для "кэш микро". Оцифрованы RFI, 3бет (в позиции и без
-// позиции) и защита опенера на 3бет — дальше (защита от 4бета и т.д.) для
+// позиции), колл BB (кроме vs SB) и защита опенера на 3бет — дальше (защита от 4бета и т.д.) для
 // этого источника чартов нет. Подставлять туда чарты Green Charts было бы
 // враньём: другой источник, другая ширина. Честно: дерево не показывает
 // линию, под которую нет чарта (тот же принцип, что у MTT_STACKS в
@@ -28,6 +28,8 @@ const RFI_MICRO_SEATS: {
   defOOP?: string;
   sbVs?: string;
   bbVs?: string;
+  /** Колл BB (`bbCallMicro.ts`) — вес руки кодирует сайзинг опена. */
+  bbCall?: string;
   defIP?: string;
   /** SB: единственный ответ (BB — 3бет) ведёт в defOOP, а не в defIP. */
   bbLeadsToOOP?: boolean;
@@ -40,6 +42,7 @@ const RFI_MICRO_SEATS: {
     defOOP: "def3betoop-micro-utg",
     sbVs: "3betoop-micro-sb-vs-utg-mp",
     bbVs: "3betoop-micro-bb-vs-utg-mp",
+    bbCall: "bbcall-micro-vs-utg-mp",
     defIP: "def3betip-micro-utg",
   },
   {
@@ -50,6 +53,7 @@ const RFI_MICRO_SEATS: {
     defOOP: "def3betoop-micro-mp",
     sbVs: "3betoop-micro-sb-vs-utg-mp",
     bbVs: "3betoop-micro-bb-vs-utg-mp",
+    bbCall: "bbcall-micro-vs-utg-mp",
     defIP: "def3betip-micro-mp",
   },
   {
@@ -60,6 +64,7 @@ const RFI_MICRO_SEATS: {
     defOOP: "def3betoop-micro-co",
     sbVs: "3betoop-micro-sb-vs-co",
     bbVs: "3betoop-micro-bb-vs-co",
+    bbCall: "bbcall-micro-vs-co",
     defIP: "def3betip-micro-co",
   },
   {
@@ -68,6 +73,7 @@ const RFI_MICRO_SEATS: {
     size: "2.5bb",
     sbVs: "3betoop-micro-sb-vs-bu",
     bbVs: "3betoop-micro-bb-vs-bu",
+    bbCall: "bbcall-micro-vs-bu",
     defIP: "def3betip-micro-btn",
   },
   {
@@ -99,7 +105,7 @@ export const RFI_MICRO_TREE: TreeNode = {
   note: "источник «кэш микро» — RFI, 3бет и защита опенера, остальные ответы (4бет и т.д.) не покрыты",
   showFold: true,
   options: RFI_MICRO_SEATS.map(
-    ({ key, seat, size, threeBetIp, defOOP, sbVs, bbVs, defIP, bbLeadsToOOP }) => {
+    ({ key, seat, size, threeBetIp, defOOP, sbVs, bbVs, bbCall, defIP, bbLeadsToOOP }) => {
       const options = [
         ...(threeBetIp
           ? [
@@ -133,6 +139,16 @@ export const RFI_MICRO_TREE: TreeNode = {
                 next: bbLeadsToOOP
                   ? (defOOP ? defenseNode(defOOP, false) : undefined)
                   : (defIP ? defenseNode(defIP, true) : undefined),
+              },
+            ]
+          : []),
+        ...(bbCall
+          ? [
+              {
+                key: "bbcall",
+                label: "BB — колл",
+                presetId: bbCall,
+                actionKind: "call" as ActionKind,
               },
             ]
           : []),
