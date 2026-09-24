@@ -9,7 +9,7 @@
 // портит: дубликаты просто не добавляются. Это важно, потому что выгрузки GG
 // пересекаются — каждая новая содержит и старые раздачи.
 
-import { Hand, repairBlinds } from "./types";
+import { Hand, isTournamentId, repairBlinds } from "./types";
 
 const DB_NAME = "pokercalc-hh";
 const DB_VERSION = 1;
@@ -76,7 +76,10 @@ export function allIds(): Promise<string[]> {
 /** Все раздачи, по возрастанию времени. */
 export async function allHands(): Promise<Hand[]> {
   const hands = await run<Hand[]>("readonly", (s) => s.getAll());
-  return hands.map(repairBlinds).sort((a, b) => a.time - b.time);
+  return hands
+    .filter((h) => !isTournamentId(h.id))
+    .map(repairBlinds)
+    .sort((a, b) => a.time - b.time);
 }
 
 export function countHands(): Promise<number> {

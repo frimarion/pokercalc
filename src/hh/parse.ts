@@ -30,8 +30,11 @@ function cardsIn(text: string): Card[] {
   return out;
 }
 
+// Блайнды обязательно в долларах: только кэш. Турнирная раздача GG
+// («Tournament #…, Level5(35/70(10))») идёт в фишках, и без `$` её «(35/70)»
+// читалось как NL7000 — фишки смешивались с долларами во всех итогах.
 const HEADER =
-  /^Poker Hand #(\S+?):\s+.*?\(\$?([\d.]+)\/\$?([\d.]+).*?\)\s+-\s+(\d{4})\/(\d{2})\/(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/;
+  /^Poker Hand #(\S+?):\s+.*?\(\$([\d.]+)\/\$([\d.]+).*?\)\s+-\s+(\d{4})\/(\d{2})\/(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/;
 const TABLE = /^Table '(.+?)'\s+(\d+)-max.*?Seat #(\d+) is the button/;
 const SEAT = /^Seat (\d+): (.+?) \(\$?([\d.]+) in chips\)/;
 const STREET_HEADER = /^\*\*\* (FIRST |SECOND |THIRD )?(FLOP|TURN|RIVER) \*\*\*(.*)$/;
@@ -92,6 +95,7 @@ export function parseHand(text: string): Hand | null {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (lines.length === 0) return null;
 
+  if (/Tournament/.test(lines[0])) return null;
   const head = HEADER.exec(lines[0]);
   if (!head) return null;
   const [, id, sb, bbAmount, y, mo, da, hh, mi, ss] = head;

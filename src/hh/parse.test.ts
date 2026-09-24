@@ -234,3 +234,13 @@ describe("битая шапка GG", () => {
     expect(h.bb).toBe(5);
   });
 });
+
+describe("турниры", () => {
+  it("турнирная раздача в фишках не разбирается как кэш", () => {
+    const text = SIMPLE.replace(
+      "Poker Hand #HD2971859807: Hold'em No Limit ($0.02/$0.05)",
+      "Poker Hand #TM5012345678: Tournament #251234567, Bounty Hunters $10 Hold'em No Limit - Level5(35/70(10))",
+    );
+    expect(parseHand(text)).toBeNull();
+  });
+});

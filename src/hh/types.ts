@@ -133,3 +133,12 @@ export function repairBlinds(h: Hand): Hand {
   if (!post || post.amount >= bbPlayer!.stack || post.amount === h.bb || post.amount <= 0) return h;
   return { ...h, bb: post.amount };
 }
+
+/**
+ * Турнирная раздача по номеру: у GG турниры идут как `TM…`, Spin & Gold —
+ * `SG…`. Парсер их больше не принимает, но в базах, импортированных раньше,
+ * они остались, а фишки в них нельзя складывать с долларами кэша.
+ */
+export function isTournamentId(id: string): boolean {
+  return /^(TM|SG)\d/.test(id);
+}
