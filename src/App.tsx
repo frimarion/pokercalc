@@ -4,10 +4,11 @@ import { MatrixPanel } from "./ui/MatrixPanel";
 import { SidePanel } from "./ui/SidePanel";
 import { Trainer } from "./ui/Trainer";
 import { Hands } from "./ui/Hands";
+import { Icm } from "./ui/Icm";
 import { RangeComparison } from "./ui/RangeComparison";
 import { useStore } from "./state/store";
 
-type Mode = "ranges" | "compare" | "trainer" | "hands";
+type Mode = "ranges" | "compare" | "trainer" | "hands" | "icm";
 
 function HeaderTools() {
   const saveScenario = useStore((s) => s.saveScenario);
@@ -64,6 +65,7 @@ export default function App() {
           {tab("compare", "Сравнение")}
           {tab("trainer", "Тренажёр")}
           {tab("hands", "История рук")}
+          {tab("icm", "ICM")}
         </div>
         {(mode === "ranges" || mode === "compare") && <HeaderTools />}
       </header>
@@ -75,6 +77,8 @@ export default function App() {
           <Trainer />
         ) : mode === "hands" ? (
           <Hands />
+        ) : mode === "icm" ? (
+          <Icm />
         ) : (
           <>
             {/* Верхняя панель: hero + борд */}
