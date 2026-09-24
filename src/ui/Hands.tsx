@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useHhStore } from "../state/hhStore";
 import { HandsImport } from "./HandsImport";
 import { HandsStats } from "./HandsStats";
 import { HandsDeviations } from "./HandsDeviations";
 import { HandsEv } from "./HandsEv";
+import { HandsFilter } from "./HandsFilter";
+import { applyFilter, playerVpips } from "../hh/filters";
 
 type View = "stats" | "charts" | "ev";
 
@@ -18,7 +20,12 @@ export function Hands() {
   const hands = useHhStore((s) => s.hands);
   const loading = useHhStore((s) => s.loading);
   const load = useHhStore((s) => s.load);
+  const filter = useHhStore((s) => s.filter);
   const [view, setView] = useState<View>("stats");
+
+  // VPIP соперников — по всей базе, а не по отфильтрованному куску (см. filters.ts).
+  const vpips = useMemo(() => playerVpips(hands), [hands]);
+  const shown = useMemo(() => applyFilter(hands, filter, vpips), [hands, filter, vpips]);
 
   useEffect(() => {
     void load();
@@ -45,6 +52,8 @@ export function Hands() {
         </div>
       ) : (
         <>
+          <HandsFilter hands={hands} shown={shown.length} vpips={vpips} />
+
           <div className="flex flex-wrap gap-1.5">
             {VIEWS.map((v) => (
               <button
@@ -62,9 +71,9 @@ export function Hands() {
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-[#0b100e] p-4">
-            {view === "stats" && <HandsStats hands={hands} />}
-            {view === "charts" && <HandsDeviations hands={hands} />}
-            {view === "ev" && <HandsEv hands={hands} />}
+            {view === "stats" && <HandsStats hands={shown} />}
+            {view === "charts" && <HandsDeviations hands={shown} />}
+            {view === "ev" && <HandsEv hands={shown} />}
           </div>
         </>
       )}

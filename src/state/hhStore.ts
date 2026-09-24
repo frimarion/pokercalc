@@ -6,6 +6,7 @@
 
 import { create } from "zustand";
 import { Hand } from "../hh/types";
+import { EMPTY_FILTER, HandFilter } from "../hh/filters";
 import { allHands, clearHands, putHands } from "../hh/db";
 import type { ImportRequest, ImportResponse } from "../workers/hh.worker";
 
@@ -29,7 +30,10 @@ interface HhState {
   /** Итог последнего импорта — показывается до следующего действия. */
   last: ImportSummary | null;
   error: string | null;
+  /** Фильтр разбора: период, лимиты, состав стола. Общий для всех разделов вкладки. */
+  filter: HandFilter;
 
+  setFilter: (patch: Partial<HandFilter>) => void;
   load: () => Promise<void>;
   importFiles: (files: File[]) => Promise<void>;
   clear: () => Promise<void>;
@@ -52,6 +56,9 @@ export const useHhStore = create<HhState>((set, get) => ({
   progress: null,
   last: null,
   error: null,
+  filter: EMPTY_FILTER,
+
+  setFilter: (patch) => set({ filter: { ...get().filter, ...patch } }),
 
   load: async () => {
     if (get().loading) return;
