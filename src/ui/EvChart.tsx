@@ -18,7 +18,7 @@ const LINES: Record<LineKey, { label: string; hint: string; color: string; width
   nonSd: { label: "Без шоудауна", hint: "Выигрыш без вскрытия: сбросы, забранные ставкой банки", color: "#f43f5e", width: 1.3 },
 };
 
-const M = { left: 52, right: 12, top: 12, bottom: 24 };
+const M = { left: 52, right: 12, top: 12, bottom: 40 };
 
 function fmt(v: number, unit: Unit, signed = true, digits?: number): string {
   const sign = !signed ? (v < 0 ? "−" : "") : v > 0 ? "+" : v < 0 ? "−" : "";
@@ -53,6 +53,21 @@ function useWidth(): [(el: HTMLDivElement | null) => void, number] {
   return [setEl, w];
 }
 
+/** Бегунок на линейке: номер раздачи под курсором или выбранной. */
+function RulerBadge({ x, y, n, color }: { x: number; y: number; n: number; color: string }) {
+  const label = n.toLocaleString("ru");
+  const w = label.length * 6.2 + 10;
+  return (
+    <g pointerEvents="none">
+      <line x1={x} x2={x} y1={y} y2={y + 8} stroke={color} strokeWidth={1.5} />
+      <rect x={x - w / 2} y={y + 8} width={w} height={15} rx={4} fill="#0b100e" stroke={color} />
+      <text x={x} y={y + 19} textAnchor="middle" fontSize={10} fontWeight={700} fill={color}>
+        {label}
+      </text>
+    </g>
+  );
+}
+
 /**
  * График выигрыша: четыре линии с легендой-переключателем, bb или $, подсказка
  * по наведению, зум выделением мышью и отметки олл-инов. Сводка в легенде
@@ -60,13 +75,13 @@ function useWidth(): [(el: HTMLDivElement | null) => void, number] {
  */
 export function EvChart({
   points,
-  focusId,
-  onFocus,
+  selectedId,
+  onSelect,
 }: {
   points: GraphPoint[];
-  /** Раздача, выбранная в таблице олл-инов: подсвечивается на графике. */
-  focusId?: string | null;
-  onFocus?: (handId: string) => void;
+  /** Выбранная раздача: кликом по графику или в таблице олл-инов. */
+  selectedId?: string | null;
+  onSelect?: (handId: string) => void;
 }) {
   const compact = useIsCompact();
   const [wrap, width] = useWidth();
@@ -82,14 +97,21 @@ export function EvChart({
   useEffect(() => setZoom(null), [points]);
 
   const focusIdx = useMemo(
-    () => (focusId ? points.findIndex((p) => p.handId === focusId) : -1),
-    [points, focusId],
+    () => (selectedId ? points.findIndex((p) => p.handId === selectedId) : -1),
+    [points, selectedId],
   );
-  // Выбрали в таблице олл-ин за краем зума — показать весь график. Только на
-  // смену выбора: иначе новый зум мимо выбранной раздачи тут же сбрасывался бы.
+  // Выбранная раздача за краем зума — сдвинуть окно к ней, сохранив ширину
+  // (листание стрелками не должно выкидывать на весь график). Только на смену
+  // выбора: иначе новый зум мимо выбранной раздачи тут же съезжал бы.
   useEffect(() => {
     if (focusIdx < 0) return;
-    setZoom((z) => (z && (focusIdx < z[0] || focusIdx > z[1]) ? null : z));
+    setZoom((z) => {
+      if (!z || (focusIdx >= z[0] && focusIdx <= z[1])) return z;
+      const w = z[1] - z[0];
+      const start = Math.max(0, Math.min(points.length - 1 - w, focusIdx - Math.round(w / 2)));
+      return [start, start + w];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusIdx]);
 
   const [from, to] = zoom ?? [0, last];
@@ -138,6 +160,14 @@ export function EvChart({
 
   const yTicks = niceTicks(lo, hi, compact ? 4 : 6);
   const xTicks = niceTicks(from + 1, to + 1, compact ? 3 : 6).filter((v) => Number.isInteger(v));
+  // Мелкие деления — пятая часть шага, пока она не меньше одной раздачи.
+  const xStep = xTicks.length > 1 ? xTicks[1] - xTicks[0] : 0;
+  const minorTicks: number[] = [];
+  if (xStep >= 5) {
+    const m = xStep / 5;
+    for (let v = Math.ceil((from + 1) / m) * m; v <= to + 1; v += m) if (v % xStep !== 0) minorTicks.push(v);
+  }
+  const y0 = M.top + plotH;
 
   /**
    * Индекс под курсором. На 15 тысячах раздач в пиксель попадает с десяток
@@ -196,7 +226,7 @@ export function EvChart({
               </button>
             </>
           ) : (
-            !compact && "выделите участок мышью, чтобы приблизить"
+            !compact && "клик — открыть раздачу, выделение мышью — приблизить"
           )}
         </span>
       </div>
@@ -256,13 +286,14 @@ export function EvChart({
             onPointerDown={(e) => {
               if (e.pointerType === "mouse" && e.button === 0) setDrag([localX(e), localX(e)]);
             }}
-            onPointerUp={() => {
+            onPointerUp={(e) => {
               if (drag && Math.abs(drag[1] - drag[0]) > 6) {
                 const a = idxAt(Math.min(drag[0], drag[1]));
                 const b = idxAt(Math.max(drag[0], drag[1]));
                 if (b - a >= 10) setZoom([a, b]);
-              } else if (hover !== null && points[hover].allIn && onFocus) {
-                onFocus(points[hover].handId);
+              } else if (onSelect) {
+                // Клик (или тап — на тач-экране pointermove до него может и не быть).
+                onSelect(points[pick(localX(e))].handId);
               }
               setDrag(null);
             }}
@@ -284,12 +315,28 @@ export function EvChart({
                 </text>
               </g>
             ))}
-            {/* Ось X — номер раздачи */}
-            {xTicks.map((v) => (
-              <text key={v} x={sx(v - 1)} y={H - 6} textAnchor="middle" fontSize={10} fill="#737373">
-                {v.toLocaleString("ru")}
-              </text>
+            {/* Линейка — номер раздачи */}
+            <rect x={M.left} y={y0} width={plotW} height={7} fill="rgba(255,255,255,0.035)" />
+            <line x1={M.left} x2={M.left + plotW} y1={y0} y2={y0} stroke="rgba(255,255,255,0.2)" />
+            {minorTicks.map((v) => (
+              <line key={`m${v}`} x1={sx(v - 1)} x2={sx(v - 1)} y1={y0} y2={y0 + 3} stroke="rgba(255,255,255,0.18)" />
             ))}
+            {xTicks.map((v) => (
+              <g key={v}>
+                <line x1={sx(v - 1)} x2={sx(v - 1)} y1={y0} y2={y0 + 7} stroke="rgba(255,255,255,0.4)" />
+                <text x={sx(v - 1)} y={y0 + 19} textAnchor="middle" fontSize={10} fill="#8a8a8a">
+                  {v.toLocaleString("ru")}
+                </text>
+              </g>
+            ))}
+            <text x={M.left - 6} y={y0 + 19} textAnchor="end" fontSize={10} fill="#525252">
+              раздачи
+            </text>
+            <text x={M.left + plotW} y={y0 + 33} textAnchor="end" fontSize={10} fill="#525252">
+              {zoom ? `${n.toLocaleString("ru")} из ${points.length.toLocaleString("ru")}` : `всего ${points.length.toLocaleString("ru")}`}
+            </text>
+            {focusIdx >= from && focusIdx <= to && <RulerBadge x={sx(focusIdx)} y={y0} n={focusIdx + 1} color="#f59e0b" />}
+            {hover !== null && hover !== focusIdx && <RulerBadge x={sx(hover)} y={y0} n={hover + 1} color="#e5e5e5" />}
 
             {/* Линии: факт поверх остальных */}
             {(["nonSd", "sd", "ev", "actual"] as LineKey[])
@@ -326,7 +373,17 @@ export function EvChart({
               })}
 
             {focusIdx >= from && focusIdx <= to && (
-              <line x1={sx(focusIdx)} x2={sx(focusIdx)} y1={M.top} y2={M.top + plotH} stroke="rgba(245,158,11,0.5)" strokeDasharray="3 3" />
+              <g pointerEvents="none">
+                <line x1={sx(focusIdx)} x2={sx(focusIdx)} y1={M.top} y2={M.top + plotH} stroke="rgba(245,158,11,0.6)" strokeDasharray="3 3" />
+                <circle
+                  cx={sx(focusIdx)}
+                  cy={sy(valueOf(points[focusIdx], shown.actual ? "actual" : active[0] ?? "ev", unit))}
+                  r={5}
+                  fill="none"
+                  stroke="#f59e0b"
+                  strokeWidth={2}
+                />
+              </g>
             )}
 
             {/* Выделение для зума */}

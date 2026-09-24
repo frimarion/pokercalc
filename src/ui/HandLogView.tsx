@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Hand } from "../hh/types";
-import { handLog } from "../hh/log";
+import { HandLog, handLog } from "../hh/log";
 import { Decision, DEVIATIONS, VERDICT_LABELS, Verdict } from "../hh/deviations";
 import { presetById } from "../presets/all";
 import { actionEdges, familyLabel, questionWeights } from "../presets/quiz";
@@ -22,10 +22,10 @@ const ACTION_LABELS: Record<Decision["action"], string> = {
   fold: "фолд",
 };
 
-const bb = (n: number) =>
+export const bb = (n: number) =>
   Math.abs(n) < 0.05 ? "0bb" : `${n > 0 ? "+" : "−"}${Math.abs(n).toFixed(1)}bb`;
 
-function Card({ card }: { card: number }) {
+export function Card({ card }: { card: number }) {
   const suit = cardSuit(card);
   return (
     <span
@@ -173,100 +173,124 @@ export function HandLogView({
         </div>
 
         {/* ── Лог раздачи ── */}
-        <div className="space-y-3">
-          {log.streets.map((s) => (
-            <div key={s.street}>
-              <div className="mb-1 flex items-center gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
-                  {s.label}
-                </span>
-                <span className="flex gap-1">
-                  {s.board.slice(s.street === "flop" ? 0 : -1).map((c) => (
-                    <Card key={c} card={c} />
-                  ))}
-                </span>
-                <span className="ml-auto text-[11px] text-neutral-600">
-                  банк {s.potBefore.toFixed(1)}bb
-                </span>
-              </div>
-              <div className="overflow-hidden rounded-lg border border-white/10">
-                {s.actions.map((a) => {
-                  const focused = a.index === decision.actionIndex;
-                  return (
-                    <div
-                      key={a.index}
-                      className={`flex items-center gap-2 px-2.5 py-1 text-sm ${
-                        focused
-                          ? isDeviation
-                            ? "bg-rose-500/15 ring-1 ring-inset ring-rose-500/40"
-                            : "bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/40"
-                          : a.isHero
-                            ? "bg-white/[0.04]"
-                            : ""
-                      } ${a.isPost ? "text-neutral-600" : ""}`}
-                    >
-                      <span
-                        className={`w-9 shrink-0 text-[11px] font-semibold ${
-                          a.isHero ? "text-emerald-400" : "text-neutral-500"
-                        }`}
-                      >
-                        {a.position}
-                      </span>
-                      <span className={a.isHero && !a.isPost ? "font-semibold" : ""}>{a.text}</span>
-                      {focused && (
-                        <span
-                          className={`ml-auto text-[10px] font-semibold uppercase ${VERDICT_TONE[decision.verdict]}`}
-                        >
-                          ← {isDeviation ? "отклонение" : "разбираемое решение"}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+        <HandLogBody
+          log={log}
+          focus={{
+            index: decision.actionIndex,
+            bad: isDeviation,
+            label: isDeviation ? "отклонение" : "разбираемое решение",
+            tone: VERDICT_TONE[decision.verdict],
+          }}
+        />
+      </div>
+    </div>
+  );
+}
 
-          {log.runs.length > 1 && (
-            <div className="text-[11px] text-neutral-500">
-              Борд разыгран {log.runs.length} раза (run it twice).
-            </div>
-          )}
+/** Подсвеченный ход в логе: какое действие и как его подписать. */
+export interface LogFocus {
+  index: number;
+  /** Ход — ошибка (красная подсветка), иначе зелёная. */
+  bad: boolean;
+  label: string;
+  tone: string;
+}
 
+/** Лог раздачи по улицам и итог. Общий для разбора отклонений и графика EV. */
+export function HandLogBody({ log, focus }: { log: HandLog; focus?: LogFocus }) {
+  return (
+    <div className="space-y-3">
+      {log.streets.map((s) => (
+        <div key={s.street}>
+          <div className="mb-1 flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+              {s.label}
+            </span>
+            <span className="flex gap-1">
+              {s.board.slice(s.street === "flop" ? 0 : -1).map((c) => (
+                <Card key={c} card={c} />
+              ))}
+            </span>
+            <span className="ml-auto text-[11px] text-neutral-600">
+              банк {s.potBefore.toFixed(1)}bb
+            </span>
+          </div>
           <div className="overflow-hidden rounded-lg border border-white/10">
-            <div className="border-b border-white/10 bg-white/[0.03] px-2.5 py-1 text-[11px] uppercase tracking-wide text-neutral-500">
-              Итог · банк {log.pot.toFixed(1)}bb, рейк {log.rake.toFixed(1)}bb
-            </div>
-            {log.results.map((r) => (
-              <div
-                key={r.position}
-                className={`flex items-center gap-2 px-2.5 py-1 text-sm ${r.isHero ? "bg-white/[0.04]" : ""}`}
-              >
-                <span
-                  className={`w-9 shrink-0 text-[11px] font-semibold ${
-                    r.isHero ? "text-emerald-400" : "text-neutral-500"
-                  }`}
+            {s.actions.map((a) => {
+              const focused = focus !== undefined && a.index === focus.index;
+              return (
+                <div
+                  key={a.index}
+                  className={`flex items-center gap-2 px-2.5 py-1 text-sm ${
+                    focused
+                      ? focus.bad
+                        ? "bg-rose-500/15 ring-1 ring-inset ring-rose-500/40"
+                        : "bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/40"
+                      : a.isHero
+                        ? "bg-white/[0.04]"
+                        : ""
+                  } ${a.isPost ? "text-neutral-600" : ""}`}
                 >
-                  {r.position}
-                </span>
-                <span className="flex gap-1">
-                  {r.cards?.map((c) => <Card key={c} card={c} />) ?? (
-                    <span className="text-[11px] text-neutral-600">
-                      {r.folded ? "сфолдил" : "не вскрылся"}
+                  <span
+                    className={`w-9 shrink-0 text-[11px] font-semibold ${
+                      a.isHero ? "text-emerald-400" : "text-neutral-500"
+                    }`}
+                  >
+                    {a.position}
+                  </span>
+                  <span className={a.isHero && !a.isPost ? "font-semibold" : ""}>{a.text}</span>
+                  {focused && (
+                    <span
+                      className={`ml-auto text-[10px] font-semibold uppercase ${focus.tone}`}
+                    >
+                      ← {focus.label}
                     </span>
                   )}
-                </span>
-                <span
-                  className={`ml-auto tabular-nums ${
-                    r.net > 0 ? "text-emerald-400" : r.net < 0 ? "text-rose-400" : "text-neutral-500"
-                  }`}
-                >
-                  {bb(r.net)}
-                </span>
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         </div>
+      ))}
+
+      {log.runs.length > 1 && (
+        <div className="text-[11px] text-neutral-500">
+          Борд разыгран {log.runs.length} раза (run it twice).
+        </div>
+      )}
+
+      <div className="overflow-hidden rounded-lg border border-white/10">
+        <div className="border-b border-white/10 bg-white/[0.03] px-2.5 py-1 text-[11px] uppercase tracking-wide text-neutral-500">
+          Итог · банк {log.pot.toFixed(1)}bb, рейк {log.rake.toFixed(1)}bb
+        </div>
+        {log.results.map((r) => (
+          <div
+            key={r.position}
+            className={`flex items-center gap-2 px-2.5 py-1 text-sm ${r.isHero ? "bg-white/[0.04]" : ""}`}
+          >
+            <span
+              className={`w-9 shrink-0 text-[11px] font-semibold ${
+                r.isHero ? "text-emerald-400" : "text-neutral-500"
+              }`}
+            >
+              {r.position}
+            </span>
+            <span className="flex gap-1">
+              {r.cards?.map((c) => <Card key={c} card={c} />) ?? (
+                <span className="text-[11px] text-neutral-600">
+                  {r.folded ? "сфолдил" : "не вскрылся"}
+                </span>
+              )}
+            </span>
+            <span
+              className={`ml-auto tabular-nums ${
+                r.net > 0 ? "text-emerald-400" : r.net < 0 ? "text-rose-400" : "text-neutral-500"
+              }`}
+            >
+              {bb(r.net)}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );

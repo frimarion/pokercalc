@@ -3,6 +3,7 @@ import { Hand } from "../hh/types";
 import { analyzeEv } from "../hh/allinEv";
 import { buildGraph } from "../hh/graph";
 import { EvChart } from "./EvChart";
+import { HandView } from "./HandView";
 
 const money = (cents: number) => `${cents < 0 ? "−" : ""}$${Math.abs(cents / 100).toFixed(2)}`;
 
@@ -18,20 +19,48 @@ export function HandsEv({ hands }: { hands: Hand[] }) {
   const ev = useMemo(() => analyzeEv(hands), [hands]);
   const points = useMemo(() => buildGraph(hands), [hands]);
   const [focus, setFocus] = useState<string | null>(null);
-  const rows = useRef<Map<string, HTMLTableRowElement>>(new Map());
   const chart = useRef<HTMLDivElement>(null);
+  const byId = useMemo(() => new Map(hands.map((h) => [h.id, h])), [hands]);
+  const idxOf = useMemo(() => new Map(points.map((p, i) => [p.handId, i])), [points]);
+  const selIdx = focus ? idxOf.get(focus) ?? -1 : -1;
 
-  // Клик по отметке олл-ина на графике — прокрутить таблицу к этой раздаче.
-  const focusFromChart = (id: string) => {
-    setFocus(id);
-    rows.current.get(id)?.scrollIntoView({ block: "center", behavior: "smooth" });
+  const step = (delta: number) => {
+    const i = selIdx + delta;
+    if (selIdx >= 0 && i >= 0 && i < points.length) setFocus(points[i].handId);
   };
+
+  // Стрелки листают раздачи, Esc закрывает — пока открыта раздача и фокус не в поле ввода.
+  useEffect(() => {
+    if (selIdx < 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+        step(e.key === "ArrowLeft" ? -1 : 1);
+      } else if (e.key === "Escape") setFocus(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   useEffect(() => setFocus(null), [hands]);
+
+  const selected =
+    selIdx >= 0 ? (
+      <HandView
+        hand={byId.get(focus!)!}
+        point={points[selIdx]}
+        total={points.length}
+        onStep={step}
+        onClose={() => setFocus(null)}
+      />
+    ) : null;
 
   if (ev.spots.length === 0) {
     return (
       <div className="space-y-4">
-        <EvChart points={points} />
+        <EvChart points={points} selectedId={focus} onSelect={setFocus} />
+        {selected}
         <div className="text-sm text-neutral-500">
           Олл-инов со вскрытием в базе нет — EV-линия совпадает с фактической.
         </div>
@@ -42,14 +71,16 @@ export function HandsEv({ hands }: { hands: Hand[] }) {
   return (
     <div className="space-y-5">
       <div ref={chart} className="rounded-2xl border border-white/10 bg-[#0f1513] p-4">
-        <EvChart points={points} focusId={focus} onFocus={focusFromChart} />
+        <EvChart points={points} selectedId={focus} onSelect={setFocus} />
       </div>
+
+      {selected}
 
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">
           Олл-ины ({ev.spots.length})
           <span className="ml-2 font-normal normal-case tracking-normal text-neutral-600">
-            клик по строке — показать на графике
+            клик по строке — открыть раздачу и показать на графике
           </span>
         </h3>
         <div className="overflow-x-auto rounded-xl border border-white/10">
@@ -73,10 +104,6 @@ export function HandsEv({ hands }: { hands: Hand[] }) {
                   return (
                     <tr
                       key={s.handId}
-                      ref={(el) => {
-                        if (el) rows.current.set(s.handId, el);
-                        else rows.current.delete(s.handId);
-                      }}
                       onClick={() => {
                         const next = focus === s.handId ? null : s.handId;
                         setFocus(next);
