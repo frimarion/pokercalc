@@ -15,9 +15,9 @@ export interface PlayerVpip {
 }
 
 /** Порог «за столом есть игрок с VPIP ≥ X». 0 — фильтра нет. */
-export type FishThreshold = 0 | 40 | 50 | 60;
+export type FishThreshold = 0 | 40 | 50 | 58 | 60;
 
-export const FISH_THRESHOLDS: FishThreshold[] = [40, 50, 60];
+export const FISH_THRESHOLDS: FishThreshold[] = [40, 50, 58, 60];
 
 /** with — такой игрок за столом есть, without — ни одного. */
 export type FishMode = "with" | "without";
@@ -52,10 +52,14 @@ export function limitLabel(bb: number): string {
   return `NL${bb}`;
 }
 
-/** Лимиты, встречающиеся в базе, по возрастанию, с числом раздач. */
+/**
+ * Лимиты, на которых есть раздачи героя, по возрастанию, с их числом.
+ * Раздачи без героя (наблюдение за столом) лимит в фильтр не добавляют:
+ * выбрать его — значит получить пустой разбор.
+ */
 export function limitsOf(hands: Hand[]): { bb: number; count: number }[] {
   const m = new Map<number, number>();
-  for (const h of hands) m.set(h.bb, (m.get(h.bb) ?? 0) + 1);
+  for (const h of hands) if (h.hero) m.set(h.bb, (m.get(h.bb) ?? 0) + 1);
   return [...m].map(([bb, count]) => ({ bb, count })).sort((a, b) => a.bb - b.bb);
 }
 

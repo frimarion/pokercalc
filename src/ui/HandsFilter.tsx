@@ -150,18 +150,31 @@ export function HandsFilter({
         <button className={chip(filter.fish === 0)} onClick={() => setFilter({ fish: 0 })}>
           Любой состав
         </button>
-        {(["with", "without"] as const).map((mode) =>
-          FISH_THRESHOLDS.map((t) => (
+        <div className="flex overflow-hidden rounded-lg border border-white/10">
+          {(["with", "without"] as const).map((mode) => (
             <button
-              key={`${mode}${t}`}
-              className={chip(filter.fish === t && filter.fishMode === mode)}
-              onClick={() => setFilter({ fish: t as FishThreshold, fishMode: mode })}
-              title={`${known.above[t] ?? 0} игроков в базе с VPIP ≥ ${t}%`}
+              key={mode}
+              onClick={() => setFilter({ fishMode: mode, fish: filter.fish || 50 })}
+              className={`px-2.5 py-1 text-xs font-semibold ${
+                filter.fish !== 0 && filter.fishMode === mode
+                  ? "bg-white/10 text-neutral-100"
+                  : "text-neutral-500 hover:bg-white/5"
+              }`}
             >
-              {mode === "with" ? "есть" : "нет"} VPIP {t}+
+              {mode === "with" ? "есть игрок" : "нет игрока"}
             </button>
-          )),
-        )}
+          ))}
+        </div>
+        {FISH_THRESHOLDS.map((t) => (
+          <button
+            key={t}
+            className={chip(filter.fish === t)}
+            onClick={() => setFilter({ fish: t as FishThreshold })}
+            title={`${known.above[t] ?? 0} игроков в базе с VPIP ≥ ${t}%`}
+          >
+            VPIP {t}+
+          </button>
+        ))}
         <span className="flex items-center gap-1.5 text-xs text-neutral-500">
           выборка от
           <select

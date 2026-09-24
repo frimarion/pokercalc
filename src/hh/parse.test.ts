@@ -226,3 +226,11 @@ describe("parseHandHistory", () => {
     expect(parseHandHistory(`${SIMPLE}\n\n\nPoker Hand #X1: обрезано`)).toHaveLength(1);
   });
 });
+
+describe("битая шапка GG", () => {
+  it("bb берётся из фактически поставленного блайнда, а не из шапки", () => {
+    const text = SIMPLE.replace("($0.02/$0.05)", "($0.02/$0.55)");
+    const h = parseHand(text)!;
+    expect(h.bb).toBe(5);
+  });
+});

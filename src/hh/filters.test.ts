@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyFilter, EMPTY_FILTER, HandFilter, playerVpips } from "./filters";
+import { applyFilter, EMPTY_FILTER, HandFilter, limitsOf, playerVpips } from "./filters";
 import { makeHand, foldsBefore } from "./fixtures";
 import { Hand } from "./types";
 
@@ -61,5 +61,13 @@ describe("фильтры базы", () => {
   it("лимиты", () => {
     expect(applyFilter(hands, f({ limits: [10] }), vpips).every((h) => h.bb === 10)).toBe(true);
     expect(applyFilter(hands, f({ limits: [5, 10] }), vpips)).toHaveLength(8);
+  });
+});
+
+describe("лимиты в фильтре", () => {
+  it("лимит без раздач героя в список не попадает", () => {
+    const mine = hand("m", "x", true, 0, 5);
+    const watched = { ...hand("w", "x", true, 0, 100), hero: null };
+    expect(limitsOf([mine, watched])).toEqual([{ bb: 5, count: 1 }]);
   });
 });

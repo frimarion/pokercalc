@@ -119,3 +119,17 @@ export function streetActions(h: Hand, street: Street): HandAction[] {
 export function toDollars(cents: number): number {
   return cents / 100;
 }
+
+/**
+ * Большой блайнд по фактической постановке, а не по шапке. GG изредка пишет
+ * в шапку битые блайнды («$0.02/$0.55» за столом NL5), а такие раздачи уже
+ * могли лечь в базу до исправления парсера — поэтому чинится и при загрузке.
+ * Короткий олл-ин на BB (стек меньше блайнда) размер блайнда не задаёт.
+ */
+export function repairBlinds(h: Hand): Hand {
+  if (!h.positionsReliable) return h;
+  const bbPlayer = h.players.find((p) => p.position === "BB");
+  const post = bbPlayer && h.actions.find((a) => a.type === "post" && a.player === bbPlayer.name);
+  if (!post || post.amount >= bbPlayer!.stack || post.amount === h.bb || post.amount <= 0) return h;
+  return { ...h, bb: post.amount };
+}

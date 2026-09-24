@@ -78,6 +78,8 @@ interface Draft {
   onStreet: Map<string, number>;
   postedSb: string | null;
   postedBb: string | null;
+  /** Сколько фактически поставлено большим блайндом (если не олл-ин короче bb). */
+  postedBbAmount: number | null;
 }
 
 function commit(d: Draft, p: HandPlayer, amount: number): void {
@@ -102,6 +104,7 @@ export function parseHand(text: string): Hand | null {
     onStreet: new Map(),
     postedSb: null,
     postedBb: null,
+    postedBbAmount: null,
   };
 
   let table = "";
@@ -189,7 +192,10 @@ export function parseHand(text: string): Hand | null {
       // Пропущенный блайнд — мёртвые деньги входящего игрока, он не задаёт
       // позицию и не считается добровольным вложением.
       if (rest.includes("small blind")) d.postedSb = name;
-      else if (rest.includes("big blind") && !rest.includes("missed")) d.postedBb = name;
+      else if (rest.includes("big blind") && !rest.includes("missed")) {
+        d.postedBb = name;
+        if (amount < p.stack) d.postedBbAmount = amount;
+      }
       d.actions.push({ street: "preflop", player: name, type: "post", amount, allIn: false });
       commit(d, p, amount);
       continue;
@@ -254,7 +260,10 @@ export function parseHand(text: string): Hand | null {
     table,
     maxSeats,
     sb: cents(sb),
-    bb: cents(bbAmount),
+    // GG изредка пишет в шапку битые блайнды: «($0.02/$0.55)» за столом
+    // NL5, где BB реально ставит $0.05. Из-за этого в фильтре появлялся
+    // лимит-призрак NL55, поэтому верим фактически поставленному блайнду.
+    bb: d.postedBbAmount ?? cents(bbAmount),
     time: new Date(
       Number(y), Number(mo) - 1, Number(da), Number(hh), Number(mi), Number(ss),
     ).getTime(),
