@@ -249,7 +249,7 @@ export function situationOf(p: RangePreset): string {
     // стека, и она уже вшита в position («EP · 10-14bb») или в группу.
     case "MTTISO":
       return p.position === "vs 2+"
-        ? "Вы против двух и больше лимперов — все они уже влимпили."
+        ? "Вы против двух и больше лимперов — все они уже сыграли лимп."
         : `Вы на ${p.position}. До вас лимп.`;
     case "MTTVSRFI":
       return `Вы на позиции «${p.position}», стек 40bb+. Соперник открыл рейзом 2bb.`;
