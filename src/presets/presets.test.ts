@@ -1,5 +1,4 @@
 import { RFI_MICRO_TREE } from "./rfiMicroTree";
-import type { TreeNode } from "./tree";
 import { describe, it, expect } from "vitest";
 import {
   ALL_PRESETS,
