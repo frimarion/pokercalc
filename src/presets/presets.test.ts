@@ -1,3 +1,5 @@
+import { RFI_MICRO_TREE } from "./rfiMicroTree";
+import type { TreeNode } from "./tree";
 import { describe, it, expect } from "vitest";
 import {
   ALL_PRESETS,
@@ -489,6 +491,19 @@ describe("Защита BB — кэш микро (один чарт)", () => {
         expect(c + r, `${k}: ${cell.label}`).toBeLessThanOrEqual(1);
         if (c > 0 && r > 0) expect([c, r], `${k}: ${cell.label}`).toEqual([0.5, 0.5]);
       }
+    }
+  });
+
+  it("в дереве «микро» у каждого опенера есть ветка «BB — защита»", () => {
+    const ids = new Set<string>();
+    const walk = (n: TreeNode) =>
+      n.options.forEach((o) => {
+        if (o.presetId) ids.add(o.presetId);
+        if (o.next) walk(o.next);
+      });
+    walk(RFI_MICRO_TREE);
+    for (const k of ["utg-mp", "co", "bu", "sb"]) {
+      expect(ids.has(`bbdef-micro-vs-${k}`), k).toBe(true);
     }
   });
 

@@ -75,6 +75,7 @@ const RFI_MICRO_SEATS: {
     key: "sb",
     seat: "SB",
     size: "3bb",
+    bbDef: "bbdef-micro-vs-sb",
     defOOP: "def3betoop-micro-sb",
     bbLeadsToOOP: true,
   },
