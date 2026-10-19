@@ -126,23 +126,14 @@ export const RFI_MICRO_TREE: TreeNode = {
         ...(bbDef
           ? [
               // Весь чарт защиты BB — без фильтра действия: 3бет, колл и фолд
-              // разведены цветом. «3бет» и «колл» ниже — те же ячейки по
-              // отдельности; дерево идёт дальше только по 3бету.
-              { key: "bbdef", label: "BB — защита", presetId: bbDef },
+              // разведены цветом. Дальше дерево идёт к ответу опенера на 3бет.
               {
-                key: "bb3bet",
-                label: "BB — 3бет",
+                key: "bbdef",
+                label: "BB — защита",
                 presetId: bbDef,
-                actionKind: "raise" as ActionKind,
                 next: bbLeadsToOOP
                   ? (defOOP ? defenseNode(defOOP, false) : undefined)
                   : (defIP ? defenseNode(defIP, true) : undefined),
-              },
-              {
-                key: "bbcall",
-                label: "BB — колл",
-                presetId: bbDef,
-                actionKind: "call" as ActionKind,
               },
             ]
           : []),
