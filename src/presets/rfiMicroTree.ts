@@ -1,5 +1,5 @@
 // Ветка событий для "кэш микро". Оцифрованы RFI, 3бет (в позиции и без
-// позиции), колл BB (кроме vs SB — там только 3бет) и защита опенера на 3бет — дальше (защита от 4бета и т.д.) для
+// позиции), защита BB одним чартом (3бет, колл, фолд) и защита опенера на 3бет — дальше (защита от 4бета и т.д.) для
 // этого источника чартов нет. Подставлять туда чарты Green Charts было бы
 // враньём: другой источник, другая ширина. Честно: дерево не показывает
 // линию, под которую нет чарта (тот же принцип, что у MTT_STACKS в
@@ -27,9 +27,8 @@ const RFI_MICRO_SEATS: {
   threeBetIp?: string;
   defOOP?: string;
   sbVs?: string;
-  bbVs?: string;
-  /** Колл BB (`bbCallMicro.ts`) — вес руки кодирует сайзинг опена. */
-  bbCall?: string;
+  /** Защита BB целиком (`bbDefenseMicro.ts`): 3бет, колл и фолд в одном чарте. */
+  bbDef?: string;
   defIP?: string;
   /** SB: единственный ответ (BB — 3бет) ведёт в defOOP, а не в defIP. */
   bbLeadsToOOP?: boolean;
@@ -41,8 +40,7 @@ const RFI_MICRO_SEATS: {
     threeBetIp: "3betip-micro-utg",
     defOOP: "def3betoop-micro-utg",
     sbVs: "3betoop-micro-sb-vs-utg-mp",
-    bbVs: "3betoop-micro-bb-vs-utg-mp",
-    bbCall: "bbcall-micro-vs-utg-mp",
+    bbDef: "bbdef-micro-vs-utg-mp",
     defIP: "def3betip-micro-utg",
   },
   {
@@ -52,8 +50,7 @@ const RFI_MICRO_SEATS: {
     threeBetIp: "3betip-micro-mp",
     defOOP: "def3betoop-micro-mp",
     sbVs: "3betoop-micro-sb-vs-utg-mp",
-    bbVs: "3betoop-micro-bb-vs-utg-mp",
-    bbCall: "bbcall-micro-vs-utg-mp",
+    bbDef: "bbdef-micro-vs-utg-mp",
     defIP: "def3betip-micro-mp",
   },
   {
@@ -63,8 +60,7 @@ const RFI_MICRO_SEATS: {
     threeBetIp: "3betip-micro-co",
     defOOP: "def3betoop-micro-co",
     sbVs: "3betoop-micro-sb-vs-co",
-    bbVs: "3betoop-micro-bb-vs-co",
-    bbCall: "bbcall-micro-vs-co",
+    bbDef: "bbdef-micro-vs-co",
     defIP: "def3betip-micro-co",
   },
   {
@@ -72,15 +68,13 @@ const RFI_MICRO_SEATS: {
     seat: "BU",
     size: "2.5bb",
     sbVs: "3betoop-micro-sb-vs-bu",
-    bbVs: "3betoop-micro-bb-vs-bu",
-    bbCall: "bbcall-micro-vs-bu",
+    bbDef: "bbdef-micro-vs-bu",
     defIP: "def3betip-micro-btn",
   },
   {
     key: "sb",
     seat: "SB",
     size: "3bb",
-    bbVs: "3betoop-micro-bb-vs-sb",
     defOOP: "def3betoop-micro-sb",
     bbLeadsToOOP: true,
   },
@@ -105,7 +99,7 @@ export const RFI_MICRO_TREE: TreeNode = {
   note: "источник «кэш микро» — RFI, 3бет и защита опенера, остальные ответы (4бет и т.д.) не покрыты",
   showFold: true,
   options: RFI_MICRO_SEATS.map(
-    ({ key, seat, size, threeBetIp, defOOP, sbVs, bbVs, bbCall, defIP, bbLeadsToOOP }) => {
+    ({ key, seat, size, threeBetIp, defOOP, sbVs, bbDef, defIP, bbLeadsToOOP }) => {
       const options = [
         ...(threeBetIp
           ? [
@@ -129,25 +123,25 @@ export const RFI_MICRO_TREE: TreeNode = {
               },
             ]
           : []),
-        ...(bbVs
+        ...(bbDef
           ? [
+              // Весь чарт защиты BB — без фильтра действия: 3бет, колл и фолд
+              // разведены цветом. «3бет» и «колл» ниже — те же ячейки по
+              // отдельности; дерево идёт дальше только по 3бету.
+              { key: "bbdef", label: "BB — защита", presetId: bbDef },
               {
                 key: "bb3bet",
                 label: "BB — 3бет",
-                presetId: bbVs,
+                presetId: bbDef,
                 actionKind: "raise" as ActionKind,
                 next: bbLeadsToOOP
                   ? (defOOP ? defenseNode(defOOP, false) : undefined)
                   : (defIP ? defenseNode(defIP, true) : undefined),
               },
-            ]
-          : []),
-        ...(bbCall
-          ? [
               {
                 key: "bbcall",
                 label: "BB — колл",
-                presetId: bbCall,
+                presetId: bbDef,
                 actionKind: "call" as ActionKind,
               },
             ]

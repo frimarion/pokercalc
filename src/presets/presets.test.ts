@@ -6,6 +6,7 @@ import {
   BBDEF_PRESETS,
   THREEBET_IP_PRESETS,
   partialWeights,
+  actionWeights,
   RangePreset,
   ActionKind,
   FORMATS,
@@ -23,7 +24,6 @@ import {
   presetWidthPct,
   BLINDS4BET_PRESETS,
   MTT_STACKS,
-  BB_CALL_MICRO_PRESETS,
 } from ".";
 import {
   QUIZ_SPOTS,
@@ -84,9 +84,6 @@ describe("пресеты Green Charts — общее", () => {
 
   it("AA всегда в игре и никогда не фолдится", () => {
     for (const p of ALL_PRESETS) {
-      // Колл BB «кэш микро» — это отдельный колл-чарт, AA лежит в соседнем
-      // 3бет-чарте того же спота, а здесь её нет по определению.
-      if (p.group === "BBCALLMICRO") continue;
       const w = handWeights(p, "AA");
       expect(w.raise + w.call, `${p.id}: AA разыгрывается лишь ${w.raise + w.call}`)
         .toBeCloseTo(1, 5);
@@ -105,7 +102,7 @@ describe("пресеты Green Charts — общее", () => {
       // Колл 4бета в позиции агрессивной линии не имеет вовсе: в источнике
       // диапазон 3бета просто раскрашен на «защищаемся / сдаём», 5бета там
       // нет, поэтому и рейз-действия в чарте нет — проверять нечего.
-      if (p.group === "DEF4BETIP" || p.group === "BBCALLMICRO") continue;
+      if (p.group === "DEF4BETIP") continue;
       const w = handWeights(p, "AA");
       const floor = p.group === "BLINDS4BET" ? 0.5 : 0.5001;
       expect(w.raise, `${p.id}: AA рейзится лишь ${w.raise}`).toBeGreaterThanOrEqual(floor);
@@ -171,8 +168,16 @@ describe("тренажёр", () => {
     // Именно этот инвариант однажды сломался молча: MTT-чарты оцифровались и
     // попали в QUIZ_SPOTS, но список групп в UI остался старым, и до них
     // нельзя было добраться ни одной кнопкой.
+    // Green Charts остались только данными для сверки истории рук — в тренажёре
+    // и дереве их нет по решению владельца.
+    const GREEN_CHARTS = new Set([
+      "RFI", "ISO", "SB3BET", "BBDEF", "3BETIP", "DEF3BETIP", "DEF3BETOOP",
+      "BLINDS4BET", "DEF4BETIP",
+    ]);
     const covered = new Set(TRAINER_SECTIONS.flatMap((s) => s.groups));
-    const existing = new Set(ALL_PRESETS.map((p) => p.group));
+    const existing = new Set(
+      ALL_PRESETS.map((p) => p.group).filter((g) => !GREEN_CHARTS.has(g)),
+    );
     for (const g of existing) {
       expect(covered.has(g), `группа ${g} не попала ни в одну секцию тренажёра`).toBe(true);
     }
@@ -440,51 +445,60 @@ describe("BB — защита", () => {
   });
 });
 
-describe("Колл BB — кэш микро", () => {
-  it("каждая рука стоит ровно в одном ярусе сайзинга", () => {
-    // Ярус (3bb / 2.5bb / 2bb) — это вес руки, и рука в двух ярусах сразу
-    // получила бы вес, которого в строке FlopzillaPro не было.
-    for (const p of BB_CALL_MICRO_PRESETS) {
-      const seen = new Set<string>();
-      for (const [h] of p.actions.flatMap((a) => [
-        ...a.always.map((x) => [x] as const),
-        ...partialWeights(a),
-      ])) {
-        expect(seen.has(h), `${p.id}: ${h} дважды`).toBe(false);
-        seen.add(h);
-      }
+describe("Защита BB — кэш микро (один чарт)", () => {
+  const ids = ["utg-mp", "co", "bu", "sb"];
+  const preset = (k: string) => presetById(`bbdef-micro-vs-${k}`)!;
+  const callOf = (k: string, h: string) => handWeights(preset(k), h).call;
+  const raiseOf = (k: string, h: string) => handWeights(preset(k), h).raise;
+
+  it("на каждого опенера один чарт с 3бетом и коллом", () => {
+    for (const k of ids) {
+      const kinds = new Set(preset(k).actions.map((a) => a.kind));
+      expect(kinds, k).toEqual(new Set(["raise", "call"]));
     }
+    // отдельных 3бет/колл-чартов BB больше нет
+    expect(presetById("bbcall-micro-vs-sb")).toBeUndefined();
+    expect(presetById("3betoop-micro-bb-vs-sb")).toBeUndefined();
+    expect(presetById("3betoop-micro-bb-vs-co")).toBeUndefined();
   });
 
-  it("чем позднее опенер, тем шире колл", () => {
-    const [utg, co, bu] = ["utg-mp", "co", "bu"].map(
-      (k) => presetById(`bbcall-micro-vs-${k}`)!,
-    );
-    expect(pct(co)).toBeGreaterThan(pct(utg));
-    expect(pct(bu)).toBeGreaterThan(pct(co));
-  });
-
-  it("клетка, где есть и колл, и 3бет, делится 50/50", () => {
-    for (const k of ["utg-mp", "co", "bu"]) {
-      const call = presetById(`bbcall-micro-vs-${k}`)!;
-      const raise = presetById(`3betoop-micro-bb-vs-${k}`)!;
-      for (const cell of GRID.flat()) {
-        const c = handWeights(call, cell.label).call;
-        const r = handWeights(raise, cell.label).raise;
-        if (c > 0 && r > 0) {
-          expect([c, r], `${k}: ${cell.label}`).toEqual([0.5, 0.5]);
+  it("каждая рука стоит ровно в одном ярусе колла", () => {
+    for (const k of ids) {
+      const seen = new Set<string>();
+      for (const a of preset(k).actions.filter((x) => x.kind === "call")) {
+        for (const [h] of actionWeights(a)) {
+          expect(seen.has(h), `${k}: ${h} дважды`).toBe(false);
+          seen.add(h);
         }
       }
     }
   });
 
-  it("против SB колла нет — только 3бет", () => {
-    expect(presetById("bbcall-micro-vs-sb")).toBeUndefined();
-    const sb = presetById("3betoop-micro-bb-vs-sb")!;
-    // прежний 3бет и бывший колл-диапазон — оба внутри
-    for (const h of ["AA", "99", "22", "A5o", "32s", "JTo", "T8o"]) {
-      expect(handWeights(sb, h).raise, h).toBeGreaterThan(0);
+  it("чем позднее опенер, тем шире защита", () => {
+    const [utg, co, bu, sb] = ids.map((k) => pct(preset(k)));
+    expect(co).toBeGreaterThan(utg);
+    expect(bu).toBeGreaterThan(co);
+    expect(sb).toBeGreaterThan(bu);
+  });
+
+  it("клетка, где есть и колл, и 3бет, делится 50/50, а сумма не больше 1", () => {
+    for (const k of ids) {
+      for (const cell of GRID.flat()) {
+        const c = callOf(k, cell.label);
+        const r = raiseOf(k, cell.label);
+        expect(c + r, `${k}: ${cell.label}`).toBeLessThanOrEqual(1);
+        if (c > 0 && r > 0) expect([c, r], `${k}: ${cell.label}`).toEqual([0.5, 0.5]);
+      }
     }
+  });
+
+  it("vs SB есть и колл, и 3бет, остальное фолд", () => {
+    expect(raiseOf("sb", "AA")).toBe(1);
+    expect(callOf("sb", "22")).toBe(1);
+    expect(callOf("sb", "A3s")).toBe(0.5);
+    expect(raiseOf("sb", "A3s")).toBe(0.5);
+    expect(callOf("sb", "A7o")).toBe(0.5);
+    expect(raiseOf("sb", "72o") + callOf("sb", "72o")).toBe(0);
   });
 });
 

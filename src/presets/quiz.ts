@@ -231,7 +231,7 @@ export function situationOf(p: RangePreset): string {
       const [heroSeat, openPart] = p.position.split(" vs ");
       return `Вы на ${heroSeat}, источник «кэш микро». ${openPart.replace(",", "/")} открыл рейзом, остальные сфолдили.`;
     }
-    case "BBCALLMICRO": {
+    case "BBDEFMICRO": {
       const openPart = p.position.split(" vs ")[1];
       return `Вы на BB, источник «кэш микро». ${openPart.replace(",", "/")} открыл рейзом 2–3bb, остальные сфолдили. Чем меньше опен, тем шире колл.`;
     }
@@ -405,22 +405,6 @@ export interface TrainerSection {
 
 export const TRAINER_SECTIONS: TrainerSection[] = [
   {
-    key: "cash",
-    label: "Кэш",
-    note: "6-max · Green Charts",
-    groups: [
-      "RFI",
-      "ISO",
-      "SB3BET",
-      "BBDEF",
-      "3BETIP",
-      "DEF3BETIP",
-      "DEF3BETOOP",
-      "BLINDS4BET",
-      "DEF4BETIP",
-    ],
-  },
-  {
     key: "cash-micro",
     label: "Кэш · микро",
     note: "«кэш микро» — свой источник: RFI, 3бет IP/OOP с блайндов и защита опенера",
@@ -428,7 +412,7 @@ export const TRAINER_SECTIONS: TrainerSection[] = [
       "RFIMICRO",
       "3BETIPMICRO",
       "3BETOOPMICRO",
-      "BBCALLMICRO",
+      "BBDEFMICRO",
       "DEF3BETIPMICRO",
       "DEF3BETOOPMICRO",
     ],

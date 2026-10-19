@@ -380,7 +380,7 @@ export function sceneFor(p: RangePreset): Scene {
     }
 
     case "3BETOOPMICRO":
-    case "BBCALLMICRO": {
+    case "BBDEFMICRO": {
       // Защитник (SB/BB) и хотя бы один опенер названы точно. Когда чарт
       // покрывает сразу двух опенеров разом (например «UTG,MP» — источник дал
       // на них общий диапазон), настоящий раскрывший карты неизвестен: опенер

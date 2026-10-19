@@ -10,7 +10,7 @@ export type PresetGroup =
   | "3BETIP"
   | "3BETIPMICRO"
   | "3BETOOPMICRO"
-  | "BBCALLMICRO"
+  | "BBDEFMICRO"
   | "DEF3BETIPMICRO"
   | "DEF3BETOOPMICRO"
   | "DEF3BETIP"
@@ -97,8 +97,8 @@ export const GROUP_LABELS: Record<PresetGroup, string> = {
   BBDEF: "BB — защита",
   "3BETIP": "3бет IP — против опена",
   "3BETIPMICRO": "3бет IP (кэш микро) — против опена",
-  "3BETOOPMICRO": "3бет OOP (кэш микро) — защита блайндов",
-  BBCALLMICRO: "Колл BB (кэш микро) — по сайзингу опена",
+  "3BETOOPMICRO": "3бет OOP (кэш микро) — защита SB",
+  BBDEFMICRO: "Защита BB (кэш микро) — 3бет, колл, фолд",
   "DEF3BETIPMICRO": "Защита на 3бет IP (кэш микро) — опенер в позиции",
   "DEF3BETOOPMICRO": "Защита на 3бет OOP (кэш микро) — опенер без позиции",
   DEF3BETIP: "Защита на 3бет — в позиции",
