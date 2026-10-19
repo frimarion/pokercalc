@@ -4,7 +4,7 @@
 // от игрока, который сам оказался в позиции.
 //
 // Легенда та же, что и в defenseVs3betMicro.ts: не в скобках — 4бет всегда
-// (вес 1.0), [50] — колл половину раздач (вес 0.5 на колл). Здесь дробных
+// (вес 1.0), [50] — колл (в источнике половину раздач, по решению владельца закрашен целиком: вес 1.0). Здесь дробных
 // блоков кроме [50] в источнике нет.
 //
 // Экспортировано из FlopzillaPro range-строкой (Copy range), не оцифровано
@@ -29,8 +29,8 @@ export const DEF3BETIP_MICRO_PRESETS: RangePreset[] = [
       {
         kind: "call",
         label: "колл",
-        always: [],
-        situational: ["QQ", "JJ", "TT", "AKs", "AQs", "AJs", "KQs", "AKo"],
+        always: ["QQ", "JJ", "TT", "AKs", "AQs", "AJs", "KQs", "AKo"],
+        situational: [],
       },
     ],
   },
@@ -50,13 +50,13 @@ export const DEF3BETIP_MICRO_PRESETS: RangePreset[] = [
       {
         kind: "call",
         label: "колл",
-        always: [],
-        situational: [
+        always: [
           "QQ", "JJ", "TT", "99",
           "AKs", "AQs", "AJs", "ATs",
           "KQs", "KJs",
           "AKo",
         ],
+        situational: [],
       },
     ],
   },
@@ -76,13 +76,13 @@ export const DEF3BETIP_MICRO_PRESETS: RangePreset[] = [
       {
         kind: "call",
         label: "колл",
-        always: [],
-        situational: [
+        always: [
           "QQ", "JJ", "TT", "99", "88", "77",
           "AKs", "AQs", "AJs", "ATs",
           "KQs", "KJs", "KTs",
           "AKo",
         ],
+        situational: [],
       },
     ],
   },
@@ -102,8 +102,7 @@ export const DEF3BETIP_MICRO_PRESETS: RangePreset[] = [
       {
         kind: "call",
         label: "колл",
-        always: [],
-        situational: [
+        always: [
           "QQ", "JJ", "TT", "99", "88", "77", "66", "55",
           "AKs", "AQs", "AJs", "ATs", "A9s", "A8s", "A7s", "A6s", "A5s", "A4s", "A3s", "A2s",
           "KQs", "KJs", "KTs", "K9s",
@@ -113,6 +112,7 @@ export const DEF3BETIP_MICRO_PRESETS: RangePreset[] = [
           "98s",
           "AKo", "AQo",
         ],
+        situational: [],
       },
     ],
   },

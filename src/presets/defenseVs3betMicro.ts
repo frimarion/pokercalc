@@ -5,7 +5,7 @@
 // в позиции постфлоп (BB против опена SB сам оказывается в позиции).
 //
 // Легенда источника: не в скобках — 4бет всегда (вес 1.0); [50] — колл
-// половину раздач (вес 0.5 на колл); [30]/[25] — смешанная стратегия
+// (в источнике половину раздач; по решению владельца закрашен целиком, вес 1.0); [30]/[25] — смешанная стратегия
 // "4бет или фолд" с указанной частотой 4бета, остаток веса уходит в фолд
 // молча (в модели диапазона это и так подразумевается весом < 1).
 //
@@ -32,8 +32,8 @@ export const DEF3BETOOP_MICRO_PRESETS: RangePreset[] = [
       {
         kind: "call",
         label: "колл",
-        always: [],
-        situational: ["QQ", "JJ", "TT", "AKs", "AQs", "KQs", "AKo"],
+        always: ["QQ", "JJ", "TT", "AKs", "AQs", "KQs", "AKo"],
+        situational: [],
       },
     ],
   },
@@ -53,8 +53,8 @@ export const DEF3BETOOP_MICRO_PRESETS: RangePreset[] = [
       {
         kind: "call",
         label: "колл",
-        always: [],
-        situational: ["QQ", "JJ", "TT", "AKs", "AQs", "KQs", "AKo"],
+        always: ["QQ", "JJ", "TT", "AKs", "AQs", "KQs", "AKo"],
+        situational: [],
       },
     ],
   },
@@ -74,13 +74,13 @@ export const DEF3BETOOP_MICRO_PRESETS: RangePreset[] = [
       {
         kind: "call",
         label: "колл",
-        always: [],
-        situational: [
+        always: [
           "QQ", "JJ", "TT", "99", "88", "77",
           "AKs", "AQs", "AJs",
           "KQs",
           "AKo",
         ],
+        situational: [],
       },
     ],
   },
@@ -101,8 +101,7 @@ export const DEF3BETOOP_MICRO_PRESETS: RangePreset[] = [
       {
         kind: "call",
         label: "колл",
-        always: [],
-        situational: [
+        always: [
           "TT", "99", "88", "77", "66", "55",
           "AQs", "AJs", "A9s", "A8s", "A7s", "A6s", "A5s", "A4s", "A3s",
           "KQs", "KJs", "KTs", "K9s", "K8s",
@@ -111,6 +110,7 @@ export const DEF3BETOOP_MICRO_PRESETS: RangePreset[] = [
           "T9s", "T8s",
           "98s",
         ],
+        situational: [],
       },
     ],
   },
