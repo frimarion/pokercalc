@@ -87,9 +87,8 @@ function defenseNode(presetId: string, ip: boolean): TreeNode {
     note: ip ? "3бет с блайнда — опенер в позиции" : "3бет в позицию — опенер без позиции",
     showFold: true,
     options: [
-      { key: "all", label: "Весь диапазон", presetId },
-      { key: "call", label: "Колл 3бета", presetId, actionKind: "call" as ActionKind },
-      { key: "raise", label: "4бет", presetId, actionKind: "raise" as ActionKind },
+      // Один чарт: колл, 4бет и фолд разведены цветом.
+      { key: "def", label: "Ответ на 3бет", presetId },
     ],
   };
 }
